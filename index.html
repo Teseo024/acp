@@ -1,0 +1,5042 @@
+<!DOCTYPE html>
+<!--
+    CONTROL ACP CICOM - ENTHEUS
+    Versión Mejorada OPTIMIZADA - Fecha: Febrero 2026
+    
+    ✨ MEJORAS APLICADAS EN ESTA VERSIÓN:
+    ========================================
+    
+    🔧 CORRECCIONES CRÍTICAS:
+    ✅ Funciones faltantes agregadas: formatearSoloHora() y calcularDuracion()
+    ✅ Función generarTimestamp() con validación automática
+    ✅ Prevención XSS: sanitizeHTML() en todos los datos de usuario
+    ✅ Confirmación mejorada al eliminar objetivos (más clara y visible)
+    
+    🛡️ SEGURIDAD:
+    ✅ Sanitización HTML en objetivos y observaciones
+    ✅ Validación de timestamps antes de guardar
+    ✅ Protección contra inyección de código
+    
+    ⚡ MEJORAS DE UX:
+    ✅ Indicador de modo offline (detecta pérdida de conexión)
+    ✅ Mensaje "Sin resultados" en búsqueda
+    ✅ Búsqueda mejorada (ignora filas de detalle)
+    ✅ Optimización de actualización de tabla
+    
+    📝 DOCUMENTACIÓN:
+    ✅ REGLA DE NEGOCIO documentada: "Cierre sin apertura" es VÁLIDO
+    ✅ JSDoc mejorado en funciones principales
+    ✅ Comentarios explicativos en código crítico
+    
+    🎨 CARACTERÍSTICAS EXISTENTES:
+    - Variable currentEditingObjectiveId correctamente declarada
+    - Constantes para configuración (NOTIFICATION_DURATION, MAX_HISTORIAL_ITEMS)
+    - Manejo de errores en localStorage (QuotaExceededError)
+    - Límite automático de historial (100 registros máximo)
+    - Validación de formato de hora (HORA_REGEX)
+    - Función mejorada de notificaciones con tipos (success, error, warning, info)
+    - Atributos ARIA para mejor accesibilidad
+    - Sistema de múltiples aperturas/cierres por día
+    - Migración automática de datos al cargar
+    - Desplegable para ver detalle de movimientos
+    
+    🎯 FUNCIONALIDADES:
+    - Control de apertura y cierre de objetivos
+    - Múltiples aperturas/cierres en el mismo día (SIN LÍMITE)
+    - Registro de pruebas y observaciones
+    - Sistema de historial automático
+    - Exportación a PDF
+    - Búsqueda y filtrado inteligente
+    - Gestión de operadores
+    - Indicador de estado de conexión
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control ACP - Verificación de Aperturas y Cierres | CICOM Entheus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --neon-cyan: #00ffff;
+            --neon-magenta: #ff00ff;
+            --neon-green: #39ff14;
+            --neon-orange: #ff6600;
+            --dark-bg: #0a0e27;
+            --darker-bg: #050814;
+            --card-bg: #12172f;
+            --text-primary: #e0e7ff;
+            --text-secondary: #94a3b8;
+            --danger: #ff3366;
+            --warning: #ffd700;
+            --success: #00ff88;
+            --border: rgba(0, 255, 255, 0.2); /* Defined border variable */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(0, 255, 255, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, rgba(255, 0, 255, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            animation: bgPulse 15s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 0.8; }
+        }
+
+        .container {
+            max-width: 1400px;
+            width: 98%;
+            margin: 0 auto;
+            padding: 10px;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--card-bg) 0%, rgba(18, 23, 47, 0.8) 100%);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            box-shadow: 
+                0 0 40px rgba(0, 255, 255, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                45deg,
+                transparent 30%,
+                rgba(0, 255, 255, 0.03) 50%,
+                transparent 70%
+            );
+            animation: headerShine 8s linear infinite;
+        }
+
+        @keyframes headerShine {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        .header-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-row-1 {
+            width: 100%;
+        }
+
+        .header-row-2 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .title-section {
+            width: 100%;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.2rem, 3vw, 1.8rem);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-magenta), var(--neon-green));
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientFlow 6s ease infinite;
+            text-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            margin-bottom: 2px;
+        }
+
+        .company-name {
+            font-family: 'Inter', sans-serif;
+            font-size: clamp(0.75rem, 1.5vw, 0.9rem);
+            font-weight: 600;
+            color: var(--neon-orange);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-top: 0;
+            opacity: 0.9;
+        }
+
+        @keyframes gradientFlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        h1::before {
+            content: '⚡';
+            margin-right: 10px;
+            -webkit-text-fill-color: var(--neon-cyan);
+            filter: drop-shadow(0 0 10px var(--neon-cyan));
+        }
+
+        .stats-grid {
+            display: flex;
+            gap: 10px;
+            flex: 0 0 auto;
+            flex-wrap: nowrap;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(18, 23, 47, 0.9) 0%, rgba(10, 14, 39, 0.9) 100%);
+            border: 2px solid;
+            border-radius: 12px;
+            padding: 8px 12px;
+            width: 110px;
+            flex-shrink: 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .stat-card:hover::before { left: 100%; }
+        .stat-card:hover { transform: translateY(-3px); }
+
+        .stat-card.abiertos {
+            border-color: var(--success);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+        }
+
+        .stat-card.cerrados {
+            border-color: var(--danger);
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.2);
+        }
+
+        .stat-card.sin-apertura {
+            border-color: var(--warning);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+        }
+
+        .stat-card.sin-movimientos {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            font-weight: 700;
+            margin-bottom: 3px;
+        }
+
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.5rem, 2.5vw, 1.8rem);
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .stat-card.abiertos .stat-value { color: var(--success); text-shadow: 0 0 8px var(--success); }
+        .stat-card.cerrados .stat-value { color: var(--danger); text-shadow: 0 0 8px var(--danger); }
+        .stat-card.sin-apertura .stat-value { color: var(--warning); text-shadow: 0 0 8px var(--warning); }
+        .stat-card.sin-movimientos .stat-value { color: var(--neon-cyan); text-shadow: 0 0 8px var(--neon-cyan); }
+
+        .toolbar {
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            box-shadow: 0 5px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 15px 12px 45px;
+            background: var(--darker-bg);
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+
+        .search-box::before {
+            content: '🔍';
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+            filter: grayscale(1);
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            width: 100%;
+        }
+
+        .btn {
+            padding: 14px 20px;
+            border: 2px solid;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+            white-space: nowrap;
+            min-width: 140px;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--neon-cyan), #0099cc);
+            border-color: var(--neon-cyan);
+            color: var(--darker-bg);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success), #00cc6a);
+            border-color: var(--success);
+            color: var(--darker-bg);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger), #cc0033);
+            border-color: var(--danger);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            border-color: var(--neon-magenta);
+            color: var(--neon-magenta);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning), #ffaa00);
+            border-color: var(--warning);
+            color: var(--darker-bg);
+        }
+
+        .table-container {
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 10px;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.4);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            min-width: 1300px; /* Reducido aún más para mejor ajuste */
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th {
+            background: linear-gradient(135deg, var(--darker-bg), var(--card-bg));
+            color: var(--neon-cyan);
+            padding: 8px 5px; /* Reducido */
+            text-align: left;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px; /* Reducido */
+            font-size: 0.65rem; /* Reducido */
+            border-bottom: 2px solid var(--neon-cyan);
+            white-space: nowrap;
+        }
+
+        th:first-child { border-top-left-radius: 10px; }
+        th:last-child { border-top-right-radius: 10px; }
+
+        tbody tr {
+            transition: all 0.2s ease;
+            background: rgba(18, 23, 47, 0.3);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        tbody tr:hover {
+            background: rgba(0, 255, 255, 0.05);
+            box-shadow: 0 3px 15px rgba(0, 255, 255, 0.1);
+        }
+
+        td {
+            padding: 8px 5px; /* Reducido */
+            font-size: 0.8rem; /* Reducido */
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+
+        .objetivo-cell {
+            font-weight: 600;
+            color: white;
+            max-width: 200px; /* Limitado */
+            min-width: 150px; /* Reducido */
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .timestamp-cell {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.7rem; /* Reducido */
+            color: var(--neon-green);
+            white-space: nowrap;
+            min-width: 80px; /* Reducido */
+            max-width: 90px;
+        }
+
+        .timestamp-fecha {
+            display: block;
+            font-weight: 700;
+            font-size: 0.75rem; /* Reducido */
+            margin-bottom: 2px;
+        }
+
+        .timestamp-hora {
+            display: block;
+            font-size: 0.65rem; /* Reducido */
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .duracion-badge {
+            display: inline-block;
+            margin-top: 3px;
+            padding: 2px 6px;
+            background: rgba(0, 255, 255, 0.15);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            color: var(--neon-cyan);
+            font-family: 'Orbitron', monospace;
+            white-space: nowrap;
+        }
+
+        .estado-badge {
+            display: inline-block;
+            padding: 4px 8px; /* Reducido */
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.6rem; /* Reducido */
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 2px solid;
+            white-space: nowrap;
+        }
+
+        .estado-abierto {
+            background: rgba(0, 255, 136, 0.25); /* Slightly more opaque */
+            border-color: var(--success);
+            color: var(--success);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5); /* Stronger glow */
+        }
+
+        .estado-cerrado {
+            background: rgba(255, 51, 102, 0.25); /* Slightly more opaque */
+            border-color: var(--danger);
+            color: var(--danger);
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.5); /* Stronger glow */
+        }
+
+        .estado-sin-registro {
+            background: rgba(255, 215, 0, 0.25); /* Slightly more opaque */
+            border-color: var(--warning);
+            color: var(--warning);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5); /* Stronger glow */
+        }
+
+        .estado-cierre-sin-apertura {
+            background: rgba(255, 0, 255, 0.25); /* Slightly more opaque */
+            border-color: var(--neon-magenta);
+            color: var(--neon-magenta);
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.5); /* Stronger glow */
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 3px; /* Más compacto */
+            flex-wrap: nowrap; /* No wrap para mantener en línea */
+            min-width: 130px; /* Reducido */
+            justify-content: center;
+        }
+
+        .action-btn {
+            padding: 5px 8px; /* Más compacto para iconos */
+            border: 1px solid;
+            border-radius: 6px;
+            font-size: 1rem; /* Tamaño emoji óptimo */
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'Inter', sans-serif;
+            white-space: nowrap;
+            min-width: 32px; /* Ancho mínimo para iconos */
+        }
+
+        .action-btn:hover {
+            transform: scale(1.05);
+            filter: brightness(1.2);
+        }
+
+        .btn-apertura {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .btn-cierre {
+            background: rgba(255, 51, 102, 0.2);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .btn-prueba {
+            background: rgba(255, 215, 0, 0.2);
+            border-color: var(--warning);
+            color: var(--warning);
+        }
+
+        .operador-select {
+            padding: 6px 8px; /* Reducido */
+            background: var(--darker-bg);
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem; /* Reducido */
+            cursor: pointer;
+            min-width: 120px; /* Reducido */
+            max-width: 150px;
+        }
+
+        .operador-select:focus {
+            outline: none;
+            border-color: var(--neon-cyan);
+        }
+
+        /* Observaciones compactas */
+        .observaciones-text {
+            display: inline-block;
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
+            font-size: 0.75rem;
+        }
+
+        .btn-edit-observaciones {
+            padding: 4px 8px;
+            margin-left: 5px;
+            font-size: 0.9rem;
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        /* Estilos para múltiples movimientos */
+        .movimientos-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 3px 8px;
+            background: rgba(0, 255, 255, 0.15);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--neon-cyan);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .movimientos-badge:hover {
+            background: rgba(0, 255, 255, 0.25);
+            transform: scale(1.05);
+        }
+
+        .movimientos-badge .icon {
+            font-size: 0.7rem;
+            margin-right: 3px;
+        }
+
+        .detalle-movimientos-row {
+            background: rgba(0, 255, 255, 0.05) !important;
+            border-left: 3px solid var(--neon-cyan);
+        }
+
+        .detalle-movimientos-row:hover {
+            background: rgba(0, 255, 255, 0.08) !important;
+        }
+
+        .detalle-movimientos-container {
+            padding: 15px 20px;
+        }
+
+        .movimiento-item {
+            display: grid;
+            grid-template-columns: 40px 1fr 1fr 80px;
+            gap: 15px;
+            align-items: center;
+            padding: 10px 15px;
+            background: var(--darker-bg);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            border-radius: 8px;
+            margin: 8px 0;
+            transition: all 0.2s ease;
+        }
+
+        .movimiento-item:hover {
+            background: rgba(0, 255, 255, 0.05);
+            border-color: var(--neon-cyan);
+        }
+
+        .movimiento-numero {
+            background: linear-gradient(135deg, var(--neon-cyan), #0099cc);
+            color: var(--darker-bg);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            font-family: 'Orbitron', monospace;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+        }
+
+        .movimiento-hora {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .movimiento-hora.apertura {
+            color: var(--success);
+        }
+
+        .movimiento-hora.cierre {
+            color: var(--danger);
+        }
+
+        .movimiento-duracion {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.75rem;
+            color: var(--neon-cyan);
+            text-align: right;
+            font-weight: 600;
+            border-color: var(--neon-cyan);
+            color: var(--neon-cyan);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 2px solid var(--neon-cyan);
+            border-radius: 20px;
+            padding: 25px;
+            width: 95%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.3);
+            animation: modalPop 0.3s ease;
+            position: relative;
+        }
+
+        /* NUEVA CLASE PARA MODALES ANCHOS (Historial) */
+        .modal-xl {
+            max-width: 1200px !important;
+            width: 90%;
+        }
+
+        /* Ajuste para que la tabla interna del historial se vea bien */
+        .historial-tabla-container {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        @keyframes modalPop {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .modal-header {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--neon-cyan);
+            text-transform: uppercase;
+            text-shadow: 0 0 10px var(--neon-cyan);
+        }
+
+        .modal-body {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            font-size: 1.2rem;
+            color: var(--neon-cyan);
+        }
+
+        .loading::before {
+            content: '⚡';
+            display: block;
+            font-size: 3.5rem;
+            margin-bottom: 15px;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { 
+                opacity: 0.5; 
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 1; 
+                transform: scale(1.1);
+            }
+        }
+
+        .add-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--neon-magenta), #cc0099);
+            border: 3px solid var(--neon-magenta);
+            color: white;
+            font-size: 2.2rem;
+            cursor: pointer;
+            box-shadow: 0 8px 30px rgba(255, 0, 255, 0.4);
+            transition: all 0.3s ease;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .add-btn:hover {
+            transform: rotate(90deg) scale(1.1);
+            box-shadow: 0 12px 40px rgba(255, 0, 255, 0.6);
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--neon-cyan);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            background: var(--darker-bg);
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 70px;
+        }
+
+        /* Historial */
+        .historial-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .historial-item {
+            background: var(--darker-bg);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .historial-item:hover {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+            transform: translateX(5px);
+        }
+
+        .historial-fecha {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--neon-green);
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .historial-count {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Indicador de conexión */
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .connection-status.offline {
+            background: linear-gradient(135deg, var(--danger), #cc0033);
+            border: 2px solid var(--danger);
+            box-shadow: 0 0 20px rgba(255, 51, 102, 0.5);
+            opacity: 1;
+        }
+
+        .connection-status .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: white;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        /* Mensaje sin resultados */
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .no-results-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .no-results-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            color: var(--neon-cyan);
+            margin-bottom: 10px;
+        }
+
+        .no-results-hint {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 1600px) {
+            table { min-width: 1250px; } /* Ajuste para pantallas 1366px-1600px */
+            .objetivo-cell { max-width: 180px; }
+        }
+
+        @media (max-width: 1200px) {
+            .container { padding: 15px 10px; }
+            .stat-card { width: 95px; }
+            table { min-width: 1200px; }
+        }
+
+        /* Responsive para pantallas grandes */
+        @media (min-width: 1400px) {
+            .btn-group {
+                max-width: 1400px;
+                margin: 0 auto;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header { padding: 12px 15px; }
+            .header-row-2 { 
+                flex-direction: column;
+                gap: 10px;
+            }
+            .theme-toggle {
+                width: 100%;
+                justify-content: center;
+            }
+            .stats-grid { 
+                width: 100%;
+                justify-content: center;
+            }
+            .stat-card {
+                width: 85px;
+                padding: 6px 10px;
+            }
+            .stat-value {
+                font-size: 1.4rem;
+            }
+            .toolbar { padding: 15px; }
+            .btn-group { 
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+            }
+            .btn { min-width: auto; font-size: 0.8rem; padding: 10px 15px; }
+            .table-container { padding: 10px; border-radius: 10px; }
+            .add-btn { width: 55px; height: 55px; font-size: 2rem; bottom: 20px; right: 20px; }
+            .modal-content { padding: 25px; }
+            .modal-header { font-size: 1.3rem; }
+        }
+
+        @media (max-width: 480px) {
+            h1 { font-size: 1rem; letter-spacing: 1px; }
+            .company-name { font-size: 0.65rem; }
+            .stats-grid { gap: 6px; }
+            .stat-card { padding: 6px 8px; width: 70px; }
+            .stat-label { font-size: 0.6rem; }
+            .stat-value { font-size: 1.3rem; }
+            .btn-group { 
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+            .btn { font-size: 0.75rem; padding: 8px 12px; }
+            .search-box input { font-size: 0.85rem; padding: 10px 10px 10px 40px; }
+        }
+
+/* ========================================
+   NUEVAS FUNCIONALIDADES - CSS COMPLETO
+   ======================================== */
+
+/* ========================================
+   MODO CLARO - VARIABLES
+   ======================================== */
+body.light-mode {
+    --neon-cyan: #0088cc;
+    --neon-magenta: #cc00aa;
+    --neon-green: #00aa33;
+    --neon-orange: #ff6600;
+    --dark-bg: #f0f2f5;
+    --darker-bg: #ffffff;
+    --card-bg: #ffffff;
+    --text-primary: #1a1a1a;
+    --text-secondary: #666666;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --success: #28a745;
+    --border: rgba(0, 0, 0, 0.15);
+}
+
+body.light-mode::before {
+    background: 
+        radial-gradient(circle at 20% 30%, rgba(0, 136, 204, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(204, 0, 170, 0.08) 0%, transparent 40%);
+}
+
+/* ========================================
+   TOGGLE DE TEMA
+   ======================================== */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.theme-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 30px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--card-bg);
+    border: 2px solid var(--neon-cyan);
+    transition: .4s;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 5px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 4px;
+    bottom: 2px;
+    background-color: var(--neon-cyan);
+    transition: .4s;
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--neon-cyan);
+}
+
+input:checked + .slider:before {
+    transform: translateX(28px);
+    background-color: var(--neon-orange);
+    box-shadow: 0 0 10px var(--neon-orange);
+}
+
+.icon-moon,
+.icon-sun {
+    font-size: 16px;
+    z-index: 1;
+}
+
+/* ========================================
+   PANEL DE FILTROS
+   ======================================== */
+.filtros-panel {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: none;
+    animation: slideDown 0.3s ease;
+}
+
+.filtros-panel.active {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: end;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.filtro-grupo {
+    flex: 1;
+    min-width: 150px;
+}
+
+.filtro-grupo label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.85rem;
+    color: var(--neon-cyan);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.filtro-grupo select,
+.filtro-grupo input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--darker-bg);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.filtro-grupo select:focus,
+.filtro-grupo input:focus {
+    outline: none;
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+}
+
+.filtro-acciones {
+    display: flex;
+    gap: 10px;
+}
+
+.badge-filtros-activos {
+    display: inline-block;
+    background: var(--neon-cyan);
+    color: var(--darker-bg);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-left: 5px;
+}
+
+/* ========================================
+   ALERTAS Y NOTIFICACIONES
+   ======================================== */
+.alertas-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+    width: 350px;
+    max-width: 90vw;
+}
+
+.alerta-item {
+    background: var(--card-bg);
+    border-left: 4px solid;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    animation: slideInRight 0.3s ease;
+    position: relative;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+}
+
+.alerta-item.warning {
+    border-color: var(--warning);
+    background: linear-gradient(to right, rgba(255, 215, 0, 0.1), var(--card-bg));
+}
+
+.alerta-item.danger {
+    border-color: var(--danger);
+    background: linear-gradient(to right, rgba(255, 51, 102, 0.1), var(--card-bg));
+}
+
+.alerta-item.info {
+    border-color: var(--neon-cyan);
+    background: linear-gradient(to right, rgba(0, 255, 255, 0.1), var(--card-bg));
+}
+
+.alerta-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.alerta-titulo {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.alerta-cerrar {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    line-height: 1;
+}
+
+.alerta-cerrar:hover {
+    color: var(--danger);
+}
+
+.alerta-mensaje {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.alerta-lista {
+    margin-top: 8px;
+    padding-left: 20px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.config-grupo {
+    margin-bottom: 20px;
+}
+
+.config-grupo label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.config-grupo input[type="checkbox"],
+.config-grupo input[type="number"] {
+    cursor: pointer;
+}
+
+/* ========================================
+   DASHBOARD
+   ======================================== */
+.modal-fullscreen {
+    padding: 10px;
+}
+
+.modal-fullscreen .modal-content {
+    max-width: 95vw;
+    max-height: 95vh;
+    width: 100%;
+}
+
+.dashboard-content {
+    display: flex;
+    flex-direction: column;
+    height: 90vh;
+}
+
+.dashboard-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.metricas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.metrica-card {
+    background: var(--darker-bg);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+
+.metrica-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.metrica-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+.graficos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.grafico-container {
+    background: var(--darker-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.grafico-container h3 {
+    font-size: 1rem;
+    color: var(--neon-cyan);
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.grafico-container canvas {
+    max-height: 300px;
+}
+
+/* ========================================
+   BACKUP MODAL
+   ======================================== */
+.backup-section {
+    padding: 20px 0;
+}
+
+.backup-section h3 {
+    color: var(--neon-cyan);
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+}
+
+.backup-section p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+}
+
+.backup-info {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--darker-bg);
+    border-radius: 8px;
+}
+
+.backup-info small {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+#backup-preview {
+    margin-top: 15px;
+    padding: 15px;
+    background: var(--darker-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+#backup-preview h4 {
+    color: var(--neon-cyan);
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+}
+
+#backup-preview-content {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+}
+
+#backup-preview-content ul {
+    list-style: none;
+    padding: 0;
+}
+
+#backup-preview-content li {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+#backup-preview-content li:last-child {
+    border-bottom: none;
+}
+
+.backup-opciones {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.backup-opciones label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.backup-opciones input[type="radio"] {
+    cursor: pointer;
+}
+
+/* ========================================
+   RESPONSIVE PARA NUEVAS FUNCIONALIDADES
+   ======================================== */
+@media (max-width: 768px) {
+    .filtros-panel.active {
+        flex-direction: column;
+    }
+    
+    .filtro-grupo {
+        width: 100%;
+    }
+    
+    .graficos-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .alertas-container {
+        width: calc(100vw - 40px);
+        right: 20px;
+    }
+    
+    .theme-toggle {
+        margin-left: 0;
+        margin-top: 10px;
+    }
+}
+    </style>
+</head>
+<body>
+    <!-- Indicador de conexión -->
+    <div class="connection-status" id="connection-status">
+        <span class="status-dot"></span>
+        <span>Sin conexión</span>
+    </div>
+    
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="header-row-1">
+                    <div class="title-section">
+                        <h1>Control ACP - Verificación de Aperturas y Cierres</h1>
+                        <div class="company-name">CICOM - Entheus | Puesto Abonados</div>
+                    </div>
+                </div>
+                <div class="header-row-2">
+                    <!-- ★ NUEVO: Toggle de Tema Claro/Oscuro - IZQUIERDA -->
+                    <div class="theme-toggle">
+                        <label class="switch">
+                            <input type="checkbox" id="theme-switch" onchange="toggleTheme()">
+                            <span class="slider">
+                                <span class="icon-moon">🌙</span>
+                                <span class="icon-sun">☀️</span>
+                            </span>
+                        </label>
+                        <span class="theme-label">Modo Claro</span>
+                    </div>
+                    
+                    <!-- Stats Grid - DERECHA -->
+                    <div class="stats-grid">
+                        <div class="stat-card abiertos">
+                            <div class="stat-label">Abiertos</div>
+                            <div class="stat-value" id="stat-abiertos">0</div>
+                        </div>
+                        <div class="stat-card cerrados">
+                            <div class="stat-label">Cerrados</div>
+                            <div class="stat-value" id="stat-cerrados">0</div>
+                        </div>
+                        <div class="stat-card sin-apertura">
+                            <div class="stat-label">Sin Apertura</div>
+                            <div class="stat-value" id="stat-sin-apertura">0</div>
+                        </div>
+                        <div class="stat-card sin-movimientos">
+                            <div class="stat-label">Sin Registro</div>
+                            <div class="stat-value" id="stat-sin-movimientos">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="toolbar">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Buscar objetivo..." aria-label="Buscar objetivo">
+            </div>
+            <div class="btn-group">
+                <!-- Fila 1: Acciones principales -->
+                <button class="btn btn-primary" onclick="exportarPDF()" aria-label="Exportar a PDF">📄 PDF</button>
+                <button class="btn btn-warning" onclick="mostrarHistorial()" aria-label="Ver historial de registros">📚 Historial</button>
+                <button class="btn btn-success" onclick="actualizarTabla()" aria-label="Actualizar tabla">🔄 Actualizar</button>
+                <button class="btn btn-primary" onclick="toggleFiltrosPanel()" aria-label="Filtros avanzados">🔍 Filtros</button>
+                <button class="btn btn-success" onclick="abrirDashboard()" aria-label="Dashboard de estadísticas">📊 Dashboard</button>
+                
+                <!-- Fila 2: Gestión y configuración -->
+                <button class="btn btn-danger" onclick="confirmarCierreDiario()" aria-label="Realizar cierre diario">🔒 Cierre</button>
+                <button class="btn btn-warning" onclick="finalizarJornada()" aria-label="Finalizar jornada laboral">🏁 Finalizar</button>
+                <button class="btn btn-secondary" onclick="resetearRegistros()" aria-label="Resetear todos los registros">🗑️ Reset</button>
+                <button class="btn btn-warning" onclick="abrirModalBackup()" aria-label="Backup y restauración">💾 Backup</button>
+                <button class="btn btn-secondary" onclick="abrirModalAlertas()" aria-label="Configurar alertas">🔔 Alertas</button>
+            </div>
+        </div>
+
+        <!-- ★ NUEVO: Panel de Filtros Avanzados -->
+        <div id="panel-filtros" class="filtros-panel">
+            <div class="filtro-grupo">
+                <label>Estado</label>
+                <select id="filtro-estado">
+                    <option value="">Todos</option>
+                    <option value="abierto">Abiertos</option>
+                    <option value="cerrado">Cerrados</option>
+                    <option value="sin-registro">Sin registro</option>
+                    <option value="cierre-sin-apertura">Cierre sin apertura</option>
+                </select>
+            </div>
+            <div class="filtro-grupo">
+                <label>Operador</label>
+                <select id="filtro-operador">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="filtro-grupo">
+                <label>Fecha</label>
+                <select id="filtro-fecha">
+                    <option value="">Todas</option>
+                    <option value="hoy">Hoy</option>
+                    <option value="ayer">Ayer</option>
+                    <option value="semana">Esta semana</option>
+                    <option value="mes">Este mes</option>
+                </select>
+            </div>
+            <div class="filtro-acciones">
+                <button class="btn btn-primary" onclick="aplicarFiltros()">🔍 Aplicar</button>
+                <button class="btn btn-secondary" onclick="limpiarFiltros()">🗑️ Limpiar</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div id="loading" class="loading">Cargando sistema...</div>
+            <table id="data-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Objetivo</th>
+                        <th>Apertura</th>
+                        <th>Cierre</th>
+                        <th>1ª Prueba</th>
+                        <th>2ª Prueba</th>
+                        <th>Observaciones</th>
+                        <th>Estado</th>
+                        <th>Operador</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <button class="add-btn" onclick="mostrarModalNuevo()" title="Nuevo Objetivo">+</button>
+
+    <!-- Modal Confirmación -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header" id="modal-title">Confirmar</div>
+            <div class="modal-body" id="modal-message"></div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+                <button class="btn btn-primary" id="modal-confirm-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nuevo Objetivo -->
+    <div id="modal-nuevo" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Nuevo Objetivo</div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nombre del Objetivo</label>
+                    <input type="text" id="nuevo-nombre" placeholder="Ej: ARMARIO NUEVO 5127">
+                </div>
+                <div class="form-group">
+                    <label>Observaciones (opcional)</label>
+                    <textarea id="nuevo-observaciones" placeholder="Notas adicionales..."></textarea>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="cerrarModalNuevo()">Cancelar</button>
+                <button class="btn btn-success" onclick="crearObjetivo()">Crear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Historial -->
+    <div id="modal-historial" class="modal">
+        <div class="modal-content wide">
+            <div class="modal-header">📚 Historial de Cierres</div>
+            <div class="modal-body">
+                <div class="historial-list" id="historial-list"></div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="cerrarHistorial()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Gestión de Objetivo -->
+    <div id="modal-editar-observaciones" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">⚙️ Gestión de Objetivo</div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nombre del Objetivo</label>
+                    <input type="text" id="edit-objetivo-nombre" placeholder="Ej: ARMARIO NUEVO 5127">
+                </div>
+                <div class="form-group">
+                    <label>Observaciones</label>
+                    <textarea id="edit-observaciones-textarea" placeholder="Notas adicionales..."></textarea>
+                </div>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 0, 0, 0.3);">
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 10px;">⚠️ Zona de peligro:</p>
+                    <button class="btn btn-danger" id="eliminar-objetivo-btn" style="width: 100%;">🗑️ Eliminar Objetivo</button>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="cerrarModalEditarObservaciones()">Cancelar</button>
+                <button class="btn btn-success" id="guardar-observaciones-btn">💾 Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // CONSTANTES Y CONFIGURACIÓN
+        // ============================================
+        const DB_KEY = 'control_acp_data';
+        const OPERADORES_KEY = 'control_acp_operadores';
+        const HISTORIAL_KEY = 'control_acp_historial';
+        const LAST_CHECK_KEY = 'control_acp_last_check';
+        const NOTIFICATION_DURATION = 3000; // Duración de notificaciones en ms
+        const MAX_HISTORIAL_ITEMS = 100; // Máximo de registros en historial
+        const HORA_REGEX = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/; // Validación formato hora
+
+        // ============================================
+        // FUNCIONES DE SEGURIDAD
+        // ============================================
+        
+        /**
+         * Sanitiza texto para prevenir XSS
+         * Convierte caracteres especiales HTML en entidades
+         * @param {string} text - Texto a sanitizar
+         * @returns {string} Texto seguro para renderizar
+         */
+        function sanitizeHTML(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================
+        // VARIABLES GLOBALES
+        // ============================================
+        let datos = [];
+        let operadores = [];
+        let currentSearchTerm = ''; // Variable para mantener el filtro activo
+        let currentEditingObjectiveId = null; // FIX: Variable ahora declarada correctamente
+        let expandedRows = new Set(); // Track de filas expandidas con múltiples movimientos
+
+window.onload = inicializarSistema;
+
+        const DEFAULT_OBJECTIVES = [
+            {
+                id: 1,
+                objetivo: 'AGOSTINA NUEVO 5127',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 2,
+                objetivo: 'ARCHIVO DE LA MEMORIA 5403',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 3,
+                objetivo: 'ARMARIO ARMERO 5154',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 4,
+                objetivo: 'ARMERO ENTHEUS 5016',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 5,
+                objetivo: 'BARADERO BOSQUE 1123',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 6,
+                objetivo: 'BAVOSI MORENO 5046',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 7,
+                objetivo: 'CASA BOSQUE 5133',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 8,
+                objetivo: 'CASA PRINCIPAL 5134',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 9,
+                objetivo: 'CEARCA BARRERAS 5156',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 10,
+                objetivo: 'COCA HALL 5005',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 11,
+                objetivo: 'COCA PISOS 5006',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 12,
+                objetivo: 'EMBAJADA ESPAÑA 5400',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 13,
+                objetivo: 'EX-ESMA 5208',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 14,
+                objetivo: 'FARMACIA PELLEGRINI 5106',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 15,
+                objetivo: 'FERRING JB JUSTO 5150',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 16,
+                objetivo: 'FERRO TRESORERÍA 5141',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 17,
+                objetivo: 'G. ALCARAZ 5034',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 18,
+                objetivo: 'G. BELLAVISTA 5038',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 19,
+                objetivo: 'G. CORRIENTES',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 20,
+                objetivo: 'G. EMPEDRADO 5039',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 21,
+                objetivo: 'G. ESQUINA 50336',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 22,
+                objetivo: 'G. GOYA 5037',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 23,
+                objetivo: 'G. LA PAZ 5035',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 24,
+                objetivo: 'G. MANSILLA 5148',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 25,
+                objetivo: 'G. PARANÁ 5033',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 26,
+                objetivo: 'G. POSADAS 5041',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 27,
+                objetivo: 'G. SAN NICOLAS 5022',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 28,
+                objetivo: 'G. SAN PEDRO 5021',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 29,
+                objetivo: 'G. ZÁRATE 5020',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 30,
+                objetivo: 'GRANJA P. BARRERAS 5145',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 31,
+                objetivo: 'HELIOS BOLÍVAR 5003',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 32,
+                objetivo: 'HELIOS CARABOBO 5051',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 33,
+                objetivo: 'HELIOS MENDOZA 5108',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 34,
+                objetivo: 'HELIOS RONDEAU 5007',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 35,
+                objetivo: 'HERRERA MARCELO INTERBAIRES 5159',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 36,
+                objetivo: 'HORNOS BUNKER 5059',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 37,
+                objetivo: 'HORNOS PABELLON4 5060',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 38,
+                objetivo: 'HORNOS PARRILA 5058',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 39,
+                objetivo: 'HOSPITAL EL CRUCE FARMACIA 5211',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 40,
+                objetivo: 'INDUSTRIAS TECNOLÓGICAS 5157',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 41,
+                objetivo: 'PCHAS BOTON PANICO-1 5120',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 42,
+                objetivo: 'PCHAS BOTON PANICO-2 5120',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 43,
+                objetivo: 'PCHAS GUARDIA 5120',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 44,
+                objetivo: 'PDO OESTE BARRERAS',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 45,
+                objetivo: 'PDO OESTE-PRUEBA BARRERA FONDO-',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 46,
+                objetivo: 'PDO OESTE-PRUEBA BARRERA FRENTE-',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 47,
+                objetivo: 'PRUEBA PERIMETRAL EX-ESMA',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 48,
+                objetivo: 'RADIO SAPIENZA 5210',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 49,
+                objetivo: 'RADIO SAPIENZA DEPOSITO',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 50,
+                objetivo: 'ROCA SHOWROOM 5048',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 51,
+                objetivo: 'SALA DE ARMAS 5155',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 52,
+                objetivo: 'SALE C. ALBERDI 5117',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 53,
+                objetivo: 'SALE C. ALBERDI 5117 CAJA',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 54,
+                objetivo: 'SALE C. MARIANO ACOSTA 5144',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 55,
+                objetivo: 'SAPIENZA BERAZATEGUI',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 56,
+                objetivo: 'SAPIENZA GLEW',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 57,
+                objetivo: 'SAPIENZA LANUS',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 58,
+                objetivo: 'SAPIENZA LAPRIDA 5215',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 59,
+                objetivo: 'SAPIENZA MONTE',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 60,
+                objetivo: 'SAPIENZA SAN JOSE',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 61,
+                objetivo: 'SAPIENZA EZEIZA',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 62,
+                objetivo: 'SAPIENZA KORN 5225',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 63,
+                objetivo: 'SAPIENZA VARELA',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 64,
+                objetivo: 'SAPIENZA GUERNICA',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 65,
+                objetivo: 'SAPIENZA SPEGAZZINI',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 66,
+                objetivo: 'SCIENZA LOMAS 5124',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 67,
+                objetivo: 'TECAL CUEROS 5024',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            },
+            {
+                id: 68,
+                objetivo: 'TECAL EXTERIOR 5023',
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: '',
+                operador: ''
+            }
+        ];
+
+        function inicializarSistema() {
+            // Cargar Operadores
+            cargarOperadores();
+
+            // Cargar Datos
+            const almacenados = localStorage.getItem(DB_KEY);
+            if (almacenados) {
+                datos = JSON.parse(almacenados);
+                console.log("Datos cargados desde localStorage");
+            } else {
+                // Solo si NO hay nada guardado, usamos los de por defecto
+                datos = JSON.parse(JSON.stringify(DEFAULT_OBJECTIVES));
+                guardarDatos();
+                console.log("Iniciando con datos por defecto");
+            }
+            
+            // MIGRACIÓN AUTOMÁTICA: Convertir estructura antigua a nueva con movimientos
+            migrarDatosAMovimientos();
+            
+            // Dibujar la tabla y estadísticas (ahora actualizarTabla se encarga de mostrarla)
+            actualizarTabla();
+            
+            // Iniciar chequeo de medianoche
+            verificarMedianoche();
+            setInterval(verificarMedianoche, 60000);
+
+            // Conectar buscador
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                filtrarTabla(e.target.value);
+            });
+
+            // Monitorear estado de conexión
+            inicializarMonitoreoConexion();
+        }
+
+        /**
+         * Inicializa el monitoreo del estado de conexión
+         * Muestra un indicador cuando no hay conexión a internet
+         */
+        function inicializarMonitoreoConexion() {
+            const statusElement = document.getElementById('connection-status');
+            
+            function actualizarEstadoConexion() {
+                if (!navigator.onLine) {
+                    statusElement.classList.add('offline');
+                } else {
+                    statusElement.classList.remove('offline');
+                }
+            }
+            
+            // Verificar estado inicial
+            actualizarEstadoConexion();
+            
+            // Escuchar cambios en el estado de conexión
+            window.addEventListener('online', actualizarEstadoConexion);
+            window.addEventListener('offline', actualizarEstadoConexion);
+        }
+
+        function cargarOperadores() {
+            const guardado = localStorage.getItem(OPERADORES_KEY);
+            if (guardado) {
+                operadores = JSON.parse(guardado);
+            } else {
+                // Cargar operadores iniciales
+                operadores = [
+                    'ARAMAYO ARIEL',
+                    'BELLIDO VANESA',
+                    'BUITRAGO CESAR',
+                    'CHICO MICAELA',
+                    'DIGRANDI TOBIAS',
+                    'DOMINGUEZ FLORENCIA',
+                    'FIRPO LUIS',
+                    'GIORDANO ANABELI',
+                    'IGLESIAS MATHIAS',
+                    'JAIMES FRANCO',
+                    'LOTO DANIEL',
+                    'MATABONI FACUNDO',
+                    'MUJICA MICAELA',
+                    'PALAVECINO MATIAS'
+                ];
+                guardarOperadores();
+            }
+        }
+
+        /**
+         * Guarda los datos en localStorage con manejo de errores
+         * @returns {boolean} true si se guardó exitosamente, false si hubo error
+         */
+        function guardarDatos() {
+            try {
+                localStorage.setItem(DB_KEY, JSON.stringify(datos));
+                return true;
+            } catch (e) {
+                if (e.name === 'QuotaExceededError') {
+                    mostrarNotificacion('⚠️ Almacenamiento lleno. Elimina datos antiguos del historial.');
+                    console.error('Error: Cuota de almacenamiento excedida');
+                } else {
+                    mostrarNotificacion('❌ Error al guardar datos');
+                    console.error('Error al guardar en localStorage:', e);
+                }
+                return false;
+            }
+        }
+
+        /**
+         * Guarda los operadores en localStorage con manejo de errores
+         * @returns {boolean} true si se guardó exitosamente, false si hubo error
+         */
+        function guardarOperadores() {
+            try {
+                localStorage.setItem(OPERADORES_KEY, JSON.stringify(operadores));
+                return true;
+            } catch (e) {
+                mostrarNotificacion('❌ Error al guardar operadores');
+                console.error('Error al guardar operadores:', e);
+                return false;
+            }
+        }
+
+        /**
+         * Migra datos antiguos a la nueva estructura con array de movimientos
+         * Se ejecuta automáticamente al cargar el sistema
+         * Es idempotente: se puede ejecutar múltiples veces sin problemas
+         */
+        function migrarDatosAMovimientos() {
+            let migrados = 0;
+            
+            datos.forEach(obj => {
+                // Si no tiene array de movimientos, crearlo
+                if (!obj.movimientos) {
+                    obj.movimientos = [];
+                    
+                    // Si tiene apertura o cierre, crear el primer movimiento
+                    if (obj.apertura || obj.cierre) {
+                        obj.movimientos.push({
+                            apertura: obj.apertura || '',
+                            cierre: obj.cierre || ''
+                        });
+                        migrados++;
+                    }
+                }
+            });
+            
+            if (migrados > 0) {
+                guardarDatos();
+                console.log(`✅ Migrados ${migrados} objetivos a nueva estructura`);
+            }
+        }
+
+        /**
+         * Obtiene el movimiento actualmente abierto (sin cierre) de un objetivo
+         * 
+         * REGLA DE NEGOCIO IMPORTANTE:
+         * ==============================
+         * - Es VÁLIDO y ESPERADO tener cierre sin apertura previa
+         *   (ocurre cuando el objetivo estaba abierto del turno anterior y solo se registra el cierre)
+         * - Es VÁLIDO tener apertura sin cierre (objetivo actualmente abierto)
+         * - Estos casos NO se consideran errores del sistema
+         * - El usuario final puede registrar cierres sin haber registrado apertura en su turno
+         * 
+         * @param {Object} obj - Objeto objetivo
+         * @returns {Object|null} El movimiento abierto (con apertura y sin cierre) o null si no hay ninguno
+         */
+        function obtenerMovimientoAbierto(obj) {
+            if (!obj.movimientos || obj.movimientos.length === 0) return null;
+            
+            // Buscar el último movimiento que tenga apertura pero no cierre
+            for (let i = obj.movimientos.length - 1; i >= 0; i--) {
+                if (obj.movimientos[i].apertura && !obj.movimientos[i].cierre) {
+                    return obj.movimientos[i];
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Actualiza los campos apertura/cierre del objeto para compatibilidad
+         * apertura = primera apertura del día
+         * cierre = último cierre del día
+         * @param {Object} obj - Objeto objetivo
+         */
+        function sincronizarCamposLegacy(obj) {
+            if (!obj.movimientos || obj.movimientos.length === 0) {
+                obj.apertura = '';
+                obj.cierre = '';
+                return;
+            }
+            
+            // Primera apertura
+            obj.apertura = obj.movimientos[0].apertura || '';
+            
+            // Último cierre (del último movimiento que tenga cierre)
+            for (let i = obj.movimientos.length - 1; i >= 0; i--) {
+                if (obj.movimientos[i].cierre) {
+                    obj.cierre = obj.movimientos[i].cierre;
+                    return;
+                }
+            }
+            
+            // Si no hay ningún cierre, dejar vacío
+            obj.cierre = '';
+        }
+
+        /**
+         * Valida si una hora tiene el formato correcto HH:MM
+         * @param {string} hora - Hora a validar
+         * @returns {boolean} true si el formato es válido
+         */
+        function validarHora(hora) {
+            if (!hora) return false;
+            return HORA_REGEX.test(hora);
+        }
+
+        /**
+         * Valida y formatea una fecha/hora completa
+         * @param {string} timestamp - Timestamp a validar
+         * @returns {boolean} true si es válido
+         */
+        function validarTimestamp(timestamp) {
+            if (!timestamp) return false;
+            // Formato esperado: DD/MM/YYYY HH:MM:SS
+            const partes = timestamp.split(' ');
+            if (partes.length !== 2) return false;
+            const [fecha, hora] = partes;
+            return fecha.includes('/') && validarHora(hora.substring(0, 5));
+        }
+
+        // AUTO-GUARDADO A MEDIANOCHE
+        function verificarMedianoche() {
+            const ahora = new Date();
+            const ultimaVerificacion = localStorage.getItem(LAST_CHECK_KEY);
+            const fechaHoy = ahora.toDateString();
+
+            // Si es un nuevo día y es después de medianoche
+            if (ultimaVerificacion !== fechaHoy) {
+                // Si ya pasó medianoche (estamos en un día diferente)
+                if (ultimaVerificacion && ultimaVerificacion !== fechaHoy) {
+                    ejecutarCierreDiarioAutomatico();
+                }
+                localStorage.setItem(LAST_CHECK_KEY, fechaHoy);
+            }
+        }
+
+        function ejecutarCierreDiarioAutomatico() {
+            console.log('Ejecutando cierre automático de medianoche...');
+            
+            // Guardar en historial
+            const historial = JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]');
+            const ayer = new Date();
+            ayer.setDate(ayer.getDate() - 1);
+            
+            // Solo guardar objetivos que tuvieron alguna actividad
+            const datosConActividad = datos.filter(obj => 
+                obj.apertura || obj.cierre || obj.prueba1 || obj.prueba2 ||
+                (obj.movimientos && obj.movimientos.length > 0)
+            );
+
+            if (datosConActividad.length > 0) {
+                historial.push({
+                    fecha: ayer.toISOString(),
+                    datos: JSON.parse(JSON.stringify(datosConActividad))
+                });
+                
+                // MEJORA: Limitar historial a MAX_HISTORIAL_ITEMS registros (eliminar más antiguos)
+                if (historial.length > MAX_HISTORIAL_ITEMS) {
+                    historial.splice(0, historial.length - MAX_HISTORIAL_ITEMS);
+                }
+                
+                localStorage.setItem(HISTORIAL_KEY, JSON.stringify(historial));
+            }
+
+            // Limpiar SOLO los que tienen todos sus movimientos cerrados
+            datos.forEach(obj => {
+                const movimientoAbierto = obtenerMovimientoAbierto(obj);
+                
+                // Si NO tiene movimientos abiertos, limpiar todo
+                if (!movimientoAbierto) {
+                    obj.apertura = '';
+                    obj.cierre = '';
+                    obj.prueba1 = '';
+                    obj.prueba2 = '';
+                    obj.operador = '';
+                    obj.movimientos = [];
+                } else {
+                    // Si tiene movimiento abierto, mantener solo ese movimiento
+                    obj.movimientos = [movimientoAbierto];
+                    sincronizarCamposLegacy(obj);
+                }
+            });
+
+            guardarDatos();
+            actualizarTabla();
+        }
+
+        function calcularEstado(obj) {
+            if (obj.apertura && !obj.cierre) return 'Abierto';
+            if (obj.cierre && !obj.apertura) return 'Cierre sin apertura';
+            if (obj.apertura && obj.cierre) return 'Cerrado';
+            return 'Sin registro';
+        }
+
+        function formatearTimestamp(timestamp) {
+            if (!timestamp) return '-';
+            
+            // Assuming timestamp is in "DD/MM/YYYY HH:MM:SS" format
+            const [datePart, timePart] = timestamp.split(' ');
+            // Split datePart for Date constructor (month is 0-indexed in JS Date)
+            const [day, month, year] = datePart.split('/');
+            const [hours, minutes, seconds] = timePart.split(':');
+
+            // Construct a Date object
+            const dateObj = new Date(year, month - 1, day, hours, minutes, seconds);
+
+            const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            return `
+                <span class="timestamp-fecha">${datePart}</span>
+                <span class="timestamp-hora">${formattedTime}</span>
+            `;
+        }
+
+        /**
+         * Extrae solo la hora de un timestamp DD/MM/YYYY HH:MM:SS
+         * @param {string} timestamp - Timestamp completo
+         * @returns {string} Solo la hora en formato HH:MM o '-' si no hay timestamp
+         */
+        function formatearSoloHora(timestamp) {
+            if (!timestamp) return '-';
+            
+            const partes = timestamp.split(' ');
+            if (partes.length < 2) return timestamp; // Si no tiene el formato esperado
+            
+            const timePart = partes[1];
+            const [hora, minutos] = timePart.split(':');
+            return `${hora}:${minutos}`;
+        }
+
+        /**
+         * Calcula la duración entre dos timestamps
+         * @param {string} apertura - Timestamp de apertura (DD/MM/YYYY HH:MM:SS)
+         * @param {string} cierre - Timestamp de cierre (DD/MM/YYYY HH:MM:SS)
+         * @returns {string} Duración en formato "Xh Ym" o '-' si hay error
+         */
+        function calcularDuracion(apertura, cierre) {
+            if (!apertura || !cierre) return '-';
+            
+            try {
+                // Función auxiliar para parsear timestamp DD/MM/YYYY HH:MM:SS
+                const parseTimestamp = (ts) => {
+                    const [datePart, timePart] = ts.split(' ');
+                    const [dia, mes, año] = datePart.split('/');
+                    const [h, m, s] = timePart.split(':');
+                    return new Date(año, mes - 1, dia, h, m, s || 0);
+                };
+                
+                const inicio = parseTimestamp(apertura);
+                const fin = parseTimestamp(cierre);
+                
+                // Calcular diferencia en milisegundos
+                const diff = fin - inicio;
+                
+                // Si la diferencia es negativa, hay un error en los datos
+                if (diff < 0) return '-';
+                
+                // Convertir a horas y minutos
+                const horas = Math.floor(diff / 3600000);
+                const minutos = Math.floor((diff % 3600000) / 60000);
+                
+                return `${horas}h ${minutos}m`;
+            } catch (e) {
+                console.error('Error calculando duración:', e);
+                return '-';
+            }
+        }
+
+        function formatearCierreConDuracion(cierre, apertura) {
+            if (!cierre) return '-';
+            
+            const timestampHTML = formatearTimestamp(cierre);
+            
+            // Si hay apertura, calcular y mostrar duración
+            if (apertura) {
+                const duracion = calcularDuracion(apertura, cierre);
+                if (duracion !== '-') {
+                    return `
+                        ${timestampHTML}
+                        <span class="duracion-badge">${duracion}</span>
+                    `;
+                }
+            }
+            
+            return timestampHTML;
+        }
+
+        function actualizarTabla() {
+            const tbody = document.getElementById('table-body');
+            // Asegurarnos que el elemento existe antes de usarlo
+            if (!tbody) return; 
+
+            tbody.innerHTML = '';
+
+            datos.forEach(obj => {
+                const estado = calcularEstado(obj);
+                
+                // Determinar si tiene múltiples movimientos
+                const numMovimientos = (obj.movimientos && obj.movimientos.length > 0) ? obj.movimientos.length : 0;
+                const tieneMultiplesMovimientos = numMovimientos > 1;
+                const isExpanded = expandedRows.has(obj.id);
+                
+                // Badge de múltiples movimientos
+                let movimientosBadge = '';
+                if (tieneMultiplesMovimientos) {
+                    const iconoFlecha = isExpanded ? '▲' : '▼';
+                    movimientosBadge = `<span class="movimientos-badge" onclick="toggleDetalleMovimientos(${obj.id})" title="Click para ver detalle">
+                        <span class="icon">${iconoFlecha}</span>${numMovimientos} mov.
+                    </span>`;
+                }
+                
+                const tr = document.createElement('tr');
+                tr.setAttribute('data-obj-id', obj.id);
+                tr.innerHTML = `
+                    <td class="objetivo-cell">${sanitizeHTML(obj.objetivo)}${movimientosBadge}</td>
+                    <td class="timestamp-cell">${formatearTimestamp(obj.apertura)}</td>
+                    <td class="timestamp-cell">${formatearCierreConDuracion(obj.cierre, obj.apertura)}</td>
+                    <td class="timestamp-cell">${formatearTimestamp(obj.prueba1)}</td>
+                    <td class="timestamp-cell">${formatearTimestamp(obj.prueba2)}</td>
+                    <td>
+                        <span class="observaciones-text">${sanitizeHTML(obj.observaciones) || '-'}</span>
+                        <button class="action-btn btn-edit-observaciones" onclick="mostrarModalEditarObservaciones(${obj.id})" title="Gestionar objetivo">✏️</button>
+                    </td>
+                    <td>
+                        <span class="estado-badge estado-${estado.toLowerCase().replace(/ /g, '-').replace('á','a')}">
+                            ${estado}
+                        </span>
+                    </td>
+                    <td>
+                        <select class="operador-select" onchange="actualizarOperador(${obj.id}, this.value)">
+                            <option value="">Seleccionar...</option>
+                            ${operadores.map(op => 
+                                `<option value="${op}" ${op === obj.operador ? 'selected' : ''}>${op}</option>`
+                            ).join('')}
+                        </select>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="action-btn btn-apertura" onclick="registrarEvento(${obj.id}, 'apertura')" title="Apertura">📥</button>
+                            <button class="action-btn btn-cierre" onclick="registrarEvento(${obj.id}, 'cierre')" title="Cierre">📤</button>
+                            <button class="action-btn btn-prueba" onclick="registrarEvento(${obj.id}, 'prueba1')" title="1ª Prueba">1️⃣</button>
+                            <button class="action-btn btn-prueba" onclick="registrarEvento(${obj.id}, 'prueba2')" title="2ª Prueba">2️⃣</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+                
+                // Si está expandido, agregar la fila de detalle
+                if (isExpanded && tieneMultiplesMovimientos) {
+                    const detalleRow = crearFilaDetalle(obj);
+                    tbody.appendChild(detalleRow);
+                }
+            });
+
+            // --- MOSTRAR LA TABLA Y OCULTAR EL LOADING ---
+            document.getElementById('loading').style.display = 'none'; // Oculta el mensaje de carga
+            document.getElementById('data-table').style.display = 'table'; // Muestra la tabla
+
+            actualizarEstadisticas();
+            
+            // --- MANTENER EL FILTRO ACTIVO SI HABÍA UNO ---
+            if (currentSearchTerm) {
+                filtrarTabla(currentSearchTerm);
+            }
+        }
+
+        /**
+         * Crea una fila HTML con el detalle de todos los movimientos de un objetivo
+         * @param {Object} obj - Objeto objetivo
+         * @returns {HTMLElement} Elemento TR con el detalle
+         */
+        function crearFilaDetalle(obj) {
+            const detalleRow = document.createElement('tr');
+            detalleRow.classList.add('detalle-movimientos-row');
+            detalleRow.setAttribute('data-detalle-for', obj.id);
+            
+            let movimientosHTML = '';
+            
+            if (obj.movimientos && obj.movimientos.length > 0) {
+                obj.movimientos.forEach((mov, index) => {
+                    const numero = index + 1;
+                    const aperturaHora = mov.apertura ? formatearSoloHora(mov.apertura) : '-';
+                    const cierreHora = mov.cierre ? formatearSoloHora(mov.cierre) : '<em style="color: var(--warning);">Abierto</em>';
+                    
+                    // Calcular duración
+                    let duracionTexto = '-';
+                    if (mov.apertura && mov.cierre) {
+                        duracionTexto = calcularDuracion(mov.apertura, mov.cierre);
+                    } else if (mov.apertura && !mov.cierre) {
+                        duracionTexto = '<em style="color: var(--warning);">En curso...</em>';
+                    }
+                    
+                    movimientosHTML += `
+                        <div class="movimiento-item">
+                            <div class="movimiento-numero">${numero}</div>
+                            <div class="movimiento-hora apertura">📥 ${aperturaHora}</div>
+                            <div class="movimiento-hora cierre">📤 ${cierreHora}</div>
+                            <div class="movimiento-duracion">${duracionTexto}</div>
+                        </div>
+                    `;
+                });
+            }
+            
+            detalleRow.innerHTML = `
+                <td colspan="9">
+                    <div class="detalle-movimientos-container">
+                        <strong style="color: var(--neon-cyan); font-family: 'Orbitron', sans-serif;">
+                            📋 Detalle de Movimientos - ${sanitizeHTML(obj.objetivo)}
+                        </strong>
+                        ${movimientosHTML}
+                    </div>
+                </td>
+            `;
+            
+            return detalleRow;
+        }
+
+        /**
+         * Expande o colapsa el detalle de movimientos de un objetivo
+         * @param {number} id - ID del objetivo
+         */
+        function toggleDetalleMovimientos(id) {
+            if (expandedRows.has(id)) {
+                expandedRows.delete(id);
+            } else {
+                expandedRows.add(id);
+            }
+            
+            // Re-renderizar tabla para actualizar estado
+            actualizarTabla();
+        }
+
+        function filtrarTabla(termino) {
+            // Guardar el término de búsqueda actual
+            currentSearchTerm = termino;
+            
+            const tbody = document.getElementById('table-body');
+            const filas = tbody.getElementsByTagName('tr');
+            const lowerCaseTermino = termino.toLowerCase();
+            let resultadosVisibles = 0;
+
+            for (let i = 0; i < filas.length; i++) {
+                const fila = filas[i];
+                
+                // Saltar el mensaje de "sin resultados" si existe
+                if (fila.id === 'no-results-message') continue;
+                
+                // Saltar filas de detalle expandido
+                if (fila.id && fila.id.startsWith('historial-detalle-')) continue;
+                
+                // Get the objective text from the first cell
+                const objetivoCell = fila.children[0];
+                const objetivoText = objetivoCell ? objetivoCell.textContent.toLowerCase() : '';
+
+                // Get the operator text from the select element in the eighth cell
+                const operadorCell = fila.children[7];
+                const operadorSelect = operadorCell ? operadorCell.querySelector('.operador-select') : null;
+                const operadorText = operadorSelect ? operadorSelect.value.toLowerCase() : '';
+
+                // Check if the search term is in either the objective or the operator
+                if (objetivoText.includes(lowerCaseTermino) || operadorText.includes(lowerCaseTermino)) {
+                    fila.style.display = '';
+                    resultadosVisibles++;
+                } else {
+                    fila.style.display = 'none';
+                }
+            }
+
+            // Mostrar mensaje si no hay resultados
+            mostrarMensajeSinResultados(resultadosVisibles === 0 && termino.trim() !== '');
+        }
+
+        /**
+         * Muestra u oculta el mensaje de "sin resultados" en la búsqueda
+         * @param {boolean} mostrar - true para mostrar, false para ocultar
+         */
+        function mostrarMensajeSinResultados(mostrar) {
+            const tbody = document.getElementById('table-body');
+            let mensajeExistente = document.getElementById('no-results-message');
+
+            if (mostrar && !mensajeExistente) {
+                // Crear mensaje
+                const tr = document.createElement('tr');
+                tr.id = 'no-results-message';
+                tr.innerHTML = `
+                    <td colspan="9" class="no-results">
+                        <div class="no-results-icon">🔍</div>
+                        <div class="no-results-text">No se encontraron resultados</div>
+                        <div class="no-results-hint">Intenta con otro término de búsqueda</div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            } else if (!mostrar && mensajeExistente) {
+                // Eliminar mensaje
+                mensajeExistente.remove();
+            }
+        }
+
+        function actualizarEstadisticas() {
+            const stats = { abiertos: 0, cerrados: 0, sinApertura: 0, sinMovimientos: 0 };
+
+            datos.forEach(obj => {
+                const estado = calcularEstado(obj).toLowerCase();
+                if (estado === 'abierto') stats.abiertos++;
+                else if (estado === 'cerrado') stats.cerrados++;
+                else if (estado === 'cierre sin apertura') stats.sinApertura++;
+                else if (estado === 'sin registro') stats.sinMovimientos++;
+            });
+
+            document.getElementById('stat-abiertos').textContent = stats.abiertos;
+            document.getElementById('stat-cerrados').textContent = stats.cerrados;
+            document.getElementById('stat-sin-apertura').textContent = stats.sinApertura;
+            document.getElementById('stat-sin-movimientos').textContent = stats.sinMovimientos;
+        }
+
+        /**
+         * Genera un timestamp válido en formato DD/MM/YYYY HH:MM:SS
+         * @param {Date} [fecha=new Date()] - Fecha opcional, por defecto usa la actual
+         * @returns {string} Timestamp formateado y validado
+         */
+        function generarTimestamp(fecha = new Date()) {
+            try {
+                const dia = fecha.getDate().toString().padStart(2, '0');
+                const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+                const año = fecha.getFullYear();
+                const horas = fecha.getHours().toString().padStart(2, '0');
+                const minutos = fecha.getMinutes().toString().padStart(2, '0');
+                const segundos = fecha.getSeconds().toString().padStart(2, '0');
+                
+                const timestamp = `${dia}/${mes}/${año} ${horas}:${minutos}:${segundos}`;
+                
+                // Validar que el timestamp generado sea válido
+                if (!validarTimestamp(timestamp)) {
+                    console.error('Timestamp generado inválido:', timestamp);
+                    return '';
+                }
+                
+                return timestamp;
+            } catch (e) {
+                console.error('Error generando timestamp:', e);
+                return '';
+            }
+        }
+
+        /**
+         * Registra un evento (apertura, cierre, prueba) para un objetivo
+         * @param {number} id - ID del objetivo
+         * @param {string} tipo - Tipo de evento: 'apertura', 'cierre', 'prueba1', 'prueba2'
+         */
+        function registrarEvento(id, tipo) {
+            const obj = datos.find(o => o.id === id);
+            if (!obj) return;
+
+            const timestamp = generarTimestamp();
+            
+            // Verificar que el timestamp sea válido
+            if (!timestamp) {
+                mostrarNotificacion('❌ Error al generar timestamp', 'error');
+                return;
+            }
+
+            const nombres = {
+                apertura: 'Apertura',
+                cierre: 'Cierre',
+                prueba1: '1ª Prueba',
+                prueba2: '2ª Prueba'
+            };
+
+            // Inicializar array de movimientos si no existe
+            if (!obj.movimientos) {
+                obj.movimientos = [];
+            }
+
+            // MANEJO ESPECIAL PARA APERTURA Y CIERRE (múltiples movimientos)
+            if (tipo === 'apertura') {
+                const movimientoAbierto = obtenerMovimientoAbierto(obj);
+                
+                if (movimientoAbierto) {
+                    // Ya hay un movimiento abierto
+                    mostrarNotificacion('⚠️ Ya hay una apertura sin cerrar. Cierra primero.', 'warning');
+                    return;
+                }
+                
+                // Crear nuevo movimiento
+                obj.movimientos.push({
+                    apertura: timestamp,
+                    cierre: ''
+                });
+                
+                sincronizarCamposLegacy(obj);
+                guardarDatos();
+                actualizarTabla();
+                mostrarNotificacion(`✅ ${nombres[tipo]} registrada (#${obj.movimientos.length})`);
+                
+            } else if (tipo === 'cierre') {
+                const movimientoAbierto = obtenerMovimientoAbierto(obj);
+                
+                if (movimientoAbierto) {
+                    // Hay un movimiento abierto - cerrarlo normalmente
+                    movimientoAbierto.cierre = timestamp;
+                } else {
+                    // No hay movimiento abierto - permitir cierre sin apertura
+                    // (caso: operador olvidó registrar apertura)
+                    obj.movimientos.push({
+                        apertura: '',
+                        cierre: timestamp
+                    });
+                    mostrarNotificacion('⚠️ Cierre sin apertura registrado', 'warning');
+                }
+                
+                sincronizarCamposLegacy(obj);
+                guardarDatos();
+                actualizarTabla();
+                
+                if (movimientoAbierto) {
+                    mostrarNotificacion(`✅ ${nombres[tipo]} registrado`);
+                }
+                
+            } else {
+                // PRUEBAS: Comportamiento original (prueba1, prueba2)
+                if (obj[tipo]) {
+                    mostrarModal(
+                        '⚠️ Sobrescribir',
+                        `Ya existe un registro de ${nombres[tipo]}. ¿Deseas sobrescribirlo?`,
+                        () => {
+                            obj[tipo] = timestamp;
+                            guardarDatos();
+                            actualizarTabla();
+                            cerrarModal();
+                            mostrarNotificacion(`✅ ${nombres[tipo]} actualizada`);
+                        }
+                    );
+                } else {
+                    obj[tipo] = timestamp;
+                    guardarDatos();
+                    actualizarTabla();
+                    mostrarNotificacion(`✅ ${nombres[tipo]} registrada`);
+                }
+            }
+        }
+
+        /**
+         * Actualiza el operador asignado a un objetivo
+         * @param {number} id - ID del objetivo
+         * @param {string} operador - Nombre del operador
+         */
+        function actualizarOperador(id, operador) {
+            const obj = datos.find(o => o.id === id);
+            if (obj) {
+                obj.operador = operador;
+                guardarDatos();
+            }
+        }
+
+        function mostrarModalNuevo() {
+            document.getElementById('modal-nuevo').classList.add('active');
+            document.getElementById('nuevo-nombre').value = '';
+            document.getElementById('nuevo-observaciones').value = '';
+        }
+
+        function cerrarModalNuevo() {
+            document.getElementById('modal-nuevo').classList.remove('active');
+        }
+
+        function crearObjetivo() {
+            const nombre = document.getElementById('nuevo-nombre').value.trim();
+            const observaciones = document.getElementById('nuevo-observaciones').value.trim();
+
+            if (!nombre) {
+                alert('⚠️ El nombre del objetivo es obligatorio');
+                return;
+            }
+
+            const nuevoId = datos.length > 0 ? Math.max(...datos.map(d => d.id)) + 1 : 1;
+
+            datos.push({
+                id: nuevoId,
+                objetivo: nombre,
+                apertura: '',
+                cierre: '',
+                prueba1: '',
+                prueba2: '',
+                observaciones: observaciones,
+                operador: '',
+                movimientos: [] // Inicializar array de movimientos
+            });
+
+            guardarDatos();
+            actualizarTabla();
+            cerrarModalNuevo();
+            mostrarNotificacion('✅ Objetivo creado exitosamente');
+        }
+
+        // CIERRE DIARIO MANUAL
+        function confirmarCierreDiario() {
+            mostrarModal(
+                '🔒 Cierre Diario',
+                '¿Confirmar cierre diario?\n\n• Se guardarán los datos en el historial\n• Se limpiarán SOLO los objetivos con cierre\n• Los abiertos continúan al día siguiente',
+                () => {
+                    ejecutarCierreDiarioManual();
+                    cerrarModal();
+                }
+            );
+        }
+
+        function ejecutarCierreDiarioManual() {
+            const historial = JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]');
+            const ahora = new Date();
+            
+            const datosConActividad = datos.filter(obj => 
+                obj.apertura || obj.cierre || obj.prueba1 || obj.prueba2 || 
+                (obj.movimientos && obj.movimientos.length > 0)
+            );
+
+            if (datosConActividad.length > 0) {
+                historial.push({
+                    fecha: ahora.toISOString(),
+                    datos: JSON.parse(JSON.stringify(datosConActividad))
+                });
+                
+                localStorage.setItem(HISTORIAL_KEY, JSON.stringify(historial));
+            }
+
+            // Limpiar SOLO los que tienen todos sus movimientos cerrados
+            datos.forEach(obj => {
+                const movimientoAbierto = obtenerMovimientoAbierto(obj);
+                
+                // Si NO tiene movimientos abiertos, limpiar todo
+                if (!movimientoAbierto) {
+                    obj.apertura = '';
+                    obj.cierre = '';
+                    obj.prueba1 = '';
+                    obj.prueba2 = '';
+                    obj.operador = '';
+                    obj.movimientos = [];
+                } else {
+                    // Si tiene movimiento abierto, mantener solo ese movimiento
+                    obj.movimientos = [movimientoAbierto];
+                    sincronizarCamposLegacy(obj);
+                }
+            });
+
+            guardarDatos();
+            actualizarTabla();
+            mostrarNotificacion('✅ Cierre diario ejecutado');
+        }
+
+        // RESET: Solo limpia registros, NO borra objetivos
+        function resetearRegistros() {
+            mostrarModal(
+                '🗑️ Reset de Registros',
+                '¿Limpiar todos los registros?\n\n• Se borrarán apertura, cierre, pruebas\n• Los OBJETIVOS se mantienen\n• Esta acción NO se puede deshacer',
+                () => {
+                    datos.forEach(obj => {
+                        obj.apertura = '';
+                        obj.cierre = '';
+                        obj.prueba1 = '';
+                        obj.prueba2 = '';
+                        obj.operador = '';
+                        obj.movimientos = []; // Limpiar array de movimientos
+                        // NO tocamos obj.objetivo ni obj.observaciones
+                    });
+                    
+                    guardarDatos();
+                    actualizarTabla();
+                    cerrarModal();
+                    mostrarNotificacion('🗑️ Registros limpiados');
+                }
+            );
+        }
+
+        function finalizarJornada() {
+            mostrarModal(
+                '🏁 Finalizar Jornada',
+                '¿Confirmar fin de jornada?\n\n• Se exportará un PDF\n• Se guardará el estado actual en el historial\n• Se limpiarán todos los registros del día',
+                () => {
+                    try {
+                        exportarPDF(); // 1. Exportar PDF
+                        // La función ejecutarCierreDiarioManual ya guarda en historial y limpia registros.
+                        // Solo necesitamos asegurarnos de que se guarde el historial antes de resetear.
+                        ejecutarCierreDiarioManual(); // 2. Guarda en historial y 3. Limpia registros (por el diseño de esta función)
+                        mostrarNotificacion('🏁 Jornada finalizada con éxito');
+                    } catch (error) {
+                        console.error('Error al finalizar jornada:', error);
+                        mostrarNotificacion('❌ Error al finalizar la jornada.');
+                    }
+                    cerrarModal();
+                }
+            );
+        }
+
+        // EXPORTAR PDF HORIZONTAL
+        // --- FUNCIÓN DE EXPORTACIÓN MODIFICADA ---
+        function exportarPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const ahora = new Date();
+            const fecha = `${ahora.getDate().toString().padStart(2, '0')}/${(ahora.getMonth() + 1).toString().padStart(2, '0')}/${ahora.getFullYear()}`;
+            const hora = `${ahora.getHours().toString().padStart(2, '0')}:${ahora.getMinutes().toString().padStart(2, '0')}`;
+
+            // Título
+            doc.setFontSize(20);
+            doc.setTextColor(0, 180, 180);
+            doc.text('CONTROL ACP - CICOM Entheus', 148, 15, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Generado: ${fecha} ${hora}`, 148, 22, { align: 'center' });
+
+            // 1. FILTRADO: Solo registros con movimiento (apertura, cierre, pruebas u observaciones)
+            const datosConMovimiento = datos.filter(obj => 
+                obj.apertura || obj.cierre || obj.prueba1 || obj.prueba2 || obj.observaciones ||
+                (obj.movimientos && obj.movimientos.length > 0)
+            );
+
+            if (datosConMovimiento.length === 0) {
+                alert("No hay registros con movimientos para exportar.");
+                return;
+            }
+
+            // 2. MAPEO: Expandir objetivos con múltiples movimientos
+            const tableData = [];
+            
+            datosConMovimiento.forEach(obj => {
+                const numMovimientos = (obj.movimientos && obj.movimientos.length > 0) ? obj.movimientos.length : 0;
+                
+                if (numMovimientos > 1) {
+                    // Objetivo con múltiples movimientos: crear una fila por cada movimiento
+                    obj.movimientos.forEach((mov, idx) => {
+                        const esPrimeraFila = idx === 0;
+                        const duracion = (mov.apertura && mov.cierre) ? calcularDuracion(mov.apertura, mov.cierre) : '-';
+                        
+                        tableData.push([
+                            esPrimeraFila ? obj.objetivo : `  ↳ Mov. ${idx + 1}`, // Indentación visual
+                            mov.apertura || '-',
+                            mov.cierre || '-',
+                            duracion,
+                            esPrimeraFila ? (obj.prueba1 || '-') : '', // Solo en primera fila
+                            esPrimeraFila ? (obj.prueba2 || '-') : '', // Solo en primera fila
+                            esPrimeraFila ? (obj.observaciones || '-') : '', // Solo en primera fila
+                            mov.cierre ? 'Cerrado' : 'Abierto',
+                            esPrimeraFila ? (obj.operador || '-') : '' // Solo en primera fila
+                        ]);
+                    });
+                } else {
+                    // Objetivo con 1 o 0 movimientos: fila normal
+                    const estado = calcularEstado(obj);
+                    const duracion = calcularDuracion(obj.apertura, obj.cierre);
+                    
+                    tableData.push([
+                        obj.objetivo,
+                        obj.apertura || '-',
+                        obj.cierre || '-',
+                        duracion,
+                        obj.prueba1 || '-',
+                        obj.prueba2 || '-',
+                        obj.observaciones || '-',
+                        estado,
+                        obj.operador || '-'
+                    ]);
+                }
+            });
+
+            doc.autoTable({
+                startY: 28,
+                head: [['Objetivo', 'Apertura', 'Cierre', 'Tiempo', '1ª P', '2ª P', 'Obs.', 'Estado', 'Operador']],
+                body: tableData,
+                theme: 'grid',
+                styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+                headStyles: {
+                    fillColor: [0, 180, 180],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                columnStyles: {
+                    0: { cellWidth: 40 }, // Objetivo
+                    3: { cellWidth: 15, fontStyle: 'bold' }, // Tiempo (destacado)
+                    6: { cellWidth: 35 }, // Obs
+                },
+                didParseCell: function(data) {
+                    // Colorear estado
+                    if (data.column.index === 7 && data.section === 'body') {
+                        const estado = data.cell.text[0];
+                        if (estado === 'Abierto') data.cell.styles.fillColor = [168, 208, 141];
+                        else if (estado === 'Cerrado') data.cell.styles.fillColor = [255, 102, 102];
+                    }
+                    
+                    // Identar filas de sub-movimientos (las que empiezan con espacios)
+                    if (data.column.index === 0 && data.section === 'body') {
+                        const texto = data.cell.text[0];
+                        if (texto && texto.startsWith('  ↳')) {
+                            data.cell.styles.fontStyle = 'italic';
+                            data.cell.styles.textColor = [100, 100, 100];
+                        }
+                    }
+                }
+            });
+
+            // Footer
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150, 150, 150);
+                doc.text(`Página ${i} de ${pageCount}`, 148, 205, { align: 'center' });
+            }
+
+            doc.save(`Control_ACP_${fecha.replace(/\//g, '-')}.pdf`);
+            mostrarNotificacion('✅ PDF con movimientos exportado');
+        }
+
+        // HISTORIAL
+        function mostrarHistorial() {
+            const historial = JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]');
+            const lista = document.getElementById('historial-list');
+            
+            if (historial.length === 0) {
+                lista.innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 40px;">No hay registros en el historial</p>';
+            } else {
+                // CORRECCIÓN: Usamos .slice() para no modificar el array original, y 'fecha' en lugar de 'dateObj'
+                lista.innerHTML = historial.slice().reverse().map((item, index) => {
+                    const fecha = new Date(item.fecha);
+                    const fechaStr = `${fecha.getDate().toString().padStart(2, '0')}/${(fecha.getMonth() + 1).toString().padStart(2, '0')}/${fecha.getFullYear()}`;
+                    const horaStr = `${fecha.getHours().toString().padStart(2, '0')}:${fecha.getMinutes().toString().padStart(2, '0')}`;
+                    
+                    // Nota: index original invertido para que coincida con el array real
+                    const originalIndex = historial.length - 1 - index;
+                    return `
+                        <div class="historial-item" onclick="verDetalleHistorial(${originalIndex})">
+                            <div class="historial-fecha">${fechaStr} ${horaStr}</div>
+                            <div class="historial-count">${item.datos.length} registros guardados</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            document.getElementById('modal-historial').classList.add('active');
+        }
+
+        function cerrarHistorial() {
+            document.getElementById('modal-historial').classList.remove('active');
+        }
+
+        /**
+         * Muestra el modal para editar nombre y observaciones de un objetivo
+         * @param {number} id - ID del objetivo a editar
+         */
+        function mostrarModalEditarObservaciones(id) {
+            currentEditingObjectiveId = id;
+            const obj = datos.find(o => o.id === id);
+            
+            if (obj) {
+                document.getElementById('edit-objetivo-nombre').value = obj.objetivo;
+                document.getElementById('edit-observaciones-textarea').value = obj.observaciones || '';
+                document.getElementById('modal-editar-observaciones').classList.add('active');
+            }
+        }
+
+        function cerrarModalEditarObservaciones() {
+            document.getElementById('modal-editar-observaciones').classList.remove('active');
+            currentEditingObjectiveId = null;
+        }
+
+        // Event listener para guardar cambios
+        document.getElementById('guardar-observaciones-btn').addEventListener('click', () => {
+            const newName = document.getElementById('edit-objetivo-nombre').value.trim();
+            const newObservations = document.getElementById('edit-observaciones-textarea').value.trim();
+            
+            if (currentEditingObjectiveId !== null) {
+                if (!newName) {
+                    alert('⚠️ El nombre del objetivo no puede estar vacío');
+                    return;
+                }
+                guardarCambiosObjetivo(currentEditingObjectiveId, newName, newObservations);
+            }
+            cerrarModalEditarObservaciones();
+        });
+
+        // Event listener para eliminar objetivo
+        document.getElementById('eliminar-objetivo-btn').addEventListener('click', () => {
+            if (currentEditingObjectiveId !== null) {
+                confirmarEliminarObjetivo(currentEditingObjectiveId);
+            }
+        });
+
+        /**
+         * Guarda los cambios realizados a un objetivo (nombre y observaciones)
+         * @param {number} id - ID del objetivo a modificar
+         * @param {string} newName - Nuevo nombre del objetivo
+         * @param {string} newObservations - Nuevas observaciones
+         */
+        function guardarCambiosObjetivo(id, newName, newObservations) {
+            const obj = datos.find(o => o.id === id);
+            if (obj) {
+                obj.objetivo = newName;
+                obj.observaciones = newObservations;
+                guardarDatos();
+                actualizarTabla();
+                mostrarNotificacion('✅ Objetivo actualizado');
+            }
+        }
+
+        function confirmarEliminarObjetivo(id) {
+            const obj = datos.find(o => o.id === id);
+            if (!obj) return;
+            
+            const objetivoSanitizado = sanitizeHTML(obj.objetivo);
+            
+            mostrarModal(
+                '⚠️ ELIMINAR OBJETIVO - CONFIRMACIÓN',
+                `
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 3rem; margin-bottom: 15px;">🗑️</div>
+                        <div style="color: var(--danger); font-weight: bold; font-size: 1.1rem; margin-bottom: 15px;">
+                            ¿Estás COMPLETAMENTE seguro?
+                        </div>
+                        <div style="background: var(--darker-bg); padding: 15px; border-radius: 8px; border: 2px solid var(--danger); margin: 15px 0;">
+                            <strong>Objetivo a eliminar:</strong><br>
+                            "${objetivoSanitizado}"
+                        </div>
+                        <div style="color: var(--warning); font-size: 0.95rem; line-height: 1.6;">
+                            ⚠️ Esta acción es <strong>PERMANENTE</strong><br>
+                            ⚠️ Se perderán todos los movimientos y registros<br>
+                            ⚠️ NO se puede deshacer
+                        </div>
+                    </div>
+                `,
+                () => {
+                    // Eliminar el objetivo del array
+                    datos = datos.filter(o => o.id !== id);
+                    guardarDatos();
+                    actualizarTabla();
+                    cerrarModal();
+                    cerrarModalEditarObservaciones();
+                    mostrarNotificacion('🗑️ Objetivo eliminado correctamente', 'success');
+                }
+            );
+        }
+
+        /**
+         * Muestra el detalle de un registro del historial en un modal
+         * @param {number} index - Índice del registro en el historial
+         */
+        function verDetalleHistorial(index) {
+            const historial = JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]');
+            const item = historial[index];
+            
+            if (!item) return;
+
+            const fecha = new Date(item.fecha);
+            const fechaStr = `${fecha.getDate().toString().padStart(2, '0')}/${(fecha.getMonth() + 1).toString().padStart(2, '0')}/${fecha.getFullYear()}`;
+            
+            // Construimos la tabla con soporte para múltiples movimientos
+            let tablaHTML = `
+                <div class="historial-tabla-container" style="overflow-x: auto; max-height: 500px;">
+                    <table style="width: 100%; border-collapse: collapse; min-width: 800px;" id="historial-table">
+                        <thead>
+                            <tr style="background: var(--darker-bg); color: var(--neon-cyan);">
+                                <th style="padding: 12px; text-align: left;">Objetivo</th>
+                                <th style="padding: 12px;">Apertura</th>
+                                <th style="padding: 12px;">Cierre</th>
+                                <th style="padding: 12px;">Operador</th>
+                                <th style="padding: 12px;">Obs</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${item.datos.map((obj, idx) => {
+                                const numMovimientos = (obj.movimientos && obj.movimientos.length > 0) ? obj.movimientos.length : 0;
+                                const tieneMultiples = numMovimientos > 1;
+                                
+                                // Badge de movimientos si tiene más de 1
+                                let movimientosBadge = '';
+                                if (tieneMultiples) {
+                                    movimientosBadge = `<span class="movimientos-badge" onclick="toggleHistorialDetalle(${idx})" style="cursor: pointer; margin-left: 8px;">
+                                        <span class="icon" id="historial-icon-${idx}">▼</span>${numMovimientos} mov.
+                                    </span>`;
+                                }
+                                
+                                return `
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);" data-historial-obj="${idx}">
+                                        <td style="padding: 10px;">${obj.objetivo}${movimientosBadge}</td>
+                                        <td style="padding: 10px; color: var(--neon-green); font-family: 'Orbitron', monospace; font-size: 0.85em;">${obj.apertura || '-'}</td>
+                                        <td style="padding: 10px; color: var(--danger); font-family: 'Orbitron', monospace; font-size: 0.85em;">${obj.cierre || '-'}</td>
+                                        <td style="padding: 10px;">${obj.operador || '-'}</td>
+                                        <td style="padding: 10px; color: var(--text-secondary); font-size: 0.9em;">${obj.observaciones || ''}</td>
+                                    </tr>
+                                    ${tieneMultiples ? `
+                                        <tr id="historial-detalle-${idx}" style="display: none; background: rgba(0, 255, 255, 0.05); border-left: 3px solid var(--neon-cyan);">
+                                            <td colspan="5" style="padding: 15px;">
+                                                <div style="font-family: 'Orbitron', sans-serif; color: var(--neon-cyan); margin-bottom: 10px;">
+                                                    <strong>📋 Detalle de Movimientos</strong>
+                                                </div>
+                                                ${obj.movimientos.map((mov, i) => {
+                                                    const aperturaHora = mov.apertura ? formatearSoloHora(mov.apertura) : '-';
+                                                    const cierreHora = mov.cierre ? formatearSoloHora(mov.cierre) : 'Abierto';
+                                                    const duracion = (mov.apertura && mov.cierre) ? calcularDuracion(mov.apertura, mov.cierre) : '-';
+                                                    
+                                                    return `
+                                                        <div style="display: grid; grid-template-columns: 40px 1fr 1fr 80px; gap: 15px; align-items: center; padding: 10px 15px; background: var(--darker-bg); border: 1px solid rgba(0, 255, 255, 0.15); border-radius: 8px; margin: 8px 0;">
+                                                            <div style="background: linear-gradient(135deg, var(--neon-cyan), #0099cc); color: var(--darker-bg); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; font-family: 'Orbitron', monospace;">${i + 1}</div>
+                                                            <div style="font-family: 'Orbitron', monospace; font-size: 0.85rem; font-weight: 600; color: var(--success);">📥 ${aperturaHora}</div>
+                                                            <div style="font-family: 'Orbitron', monospace; font-size: 0.85rem; font-weight: 600; color: var(--danger);">📤 ${cierreHora}</div>
+                                                            <div style="font-family: 'Orbitron', monospace; font-size: 0.75rem; color: var(--neon-cyan); text-align: right; font-weight: 600;">${duracion}</div>
+                                                        </div>
+                                                    `;
+                                                }).join('')}
+                                            </td>
+                                        </tr>
+                                    ` : ''}
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            // 1. Agrandamos el modal
+            const modalContent = document.querySelector('#modal .modal-content');
+            modalContent.classList.add('modal-xl');
+            
+            // 2. Mostramos el modal usando la función estándar
+            // Pasamos el título directamente aquí para no tener que ocultarlo/mostrarlo
+            mostrarModal(`📅 Historial del ${fechaStr}`, tablaHTML, () => {
+                cerrarModal();
+            });
+
+            // 3. Ajuste especial: Cambiar botón de confirmación a "Cerrar"
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+            confirmBtn.innerText = "Cerrar";
+            confirmBtn.onclick = cerrarModal; 
+        }
+
+        /**
+         * Toggle detalle de movimientos en el modal de historial
+         * @param {number} idx - Índice del objetivo en el historial
+         */
+        function toggleHistorialDetalle(idx) {
+            const detalleRow = document.getElementById(`historial-detalle-${idx}`);
+            const icon = document.getElementById(`historial-icon-${idx}`);
+            
+            if (detalleRow.style.display === 'none') {
+                detalleRow.style.display = 'table-row';
+                icon.textContent = '▲';
+            } else {
+                detalleRow.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
+        function mostrarModal(titulo, mensaje, callback) {
+            document.getElementById('modal-title').innerHTML = titulo;
+            document.getElementById('modal-message').innerHTML = mensaje;
+            document.getElementById('modal').classList.add('active');
+            document.getElementById('modal-confirm-btn').onclick = callback;
+        }
+
+        function cerrarModal() {
+            const modal = document.getElementById('modal');
+            const modalContent = modal.querySelector('.modal-content');
+            
+            // 1. Ocultar modal
+            modal.classList.remove('active');
+            
+            // 2. LIMPIEZA TOTAL (Restaurar estado original)
+            setTimeout(() => {
+                // Quitar clase gigante
+                modalContent.classList.remove('modal-xl');
+                // Restaurar título por si se ocultó
+                document.getElementById('modal-title').style.display = 'block';
+                // Restaurar texto del botón
+                document.getElementById('modal-confirm-btn').innerText = "Confirmar";
+            }, 300); // Pequeño delay para que no se vea el "salto" mientras desaparece
+        }
+
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target.id === 'modal') cerrarModal();
+        });
+
+        document.getElementById('modal-nuevo').addEventListener('click', (e) => {
+            if (e.target.id === 'modal-nuevo') cerrarModalNuevo();
+        });
+
+        document.getElementById('modal-historial').addEventListener('click', (e) => {
+            if (e.target.id === 'modal-historial') cerrarHistorial();
+        });
+
+        document.getElementById('modal-editar-observaciones').addEventListener('click', (e) => {
+            if (e.target.id === 'modal-editar-observaciones') cerrarModalEditarObservaciones();
+        });
+
+        /**
+         * Muestra una notificación temporal en pantalla
+         * @param {string} mensaje - Mensaje a mostrar
+         * @param {string} tipo - Tipo de notificación: 'success', 'error', 'warning', 'info'
+         */
+        function mostrarNotificacion(mensaje, tipo = 'info') {
+            const notif = document.createElement('div');
+            notif.textContent = mensaje;
+            notif.setAttribute('role', 'alert');
+            notif.setAttribute('aria-live', 'polite');
+            
+            // Colores según tipo de notificación
+            const colores = {
+                success: 'var(--success)',
+                error: 'var(--danger)',
+                warning: 'var(--warning)',
+                info: 'var(--neon-cyan)'
+            };
+            
+            const color = colores[tipo] || colores.info;
+            
+            notif.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: var(--card-bg);
+                color: ${color};
+                padding: 18px 25px;
+                border-radius: 12px;
+                border: 2px solid ${color};
+                box-shadow: 0 0 30px ${color}33;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+                font-family: 'Orbitron', sans-serif;
+                font-size: 0.95rem;
+                max-width: 350px;
+                word-wrap: break-word;
+            `;
+            
+            document.body.appendChild(notif);
+            
+            setTimeout(() => {
+                notif.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notif.remove(), 300);
+            }, NOTIFICATION_DURATION);
+        }
+
+// ========================================
+// NUEVAS FUNCIONALIDADES - JAVASCRIPT
+// ========================================
+
+// ========================================
+// CONFIGURACIÓN GLOBAL
+// ========================================
+const CONFIG_ALERTAS_KEY = 'control_acp_config_alertas';
+const ULTIMO_BACKUP_KEY = 'control_acp_ultimo_backup';
+const TEMA_KEY = 'control_acp_tema';
+
+let configAlertas = {
+    tiempoAbierto: { activo: false, horas: 8 },
+    sinCerrar: { activo: true, hora: '18:00' },
+    resumenDiario: { activo: true },
+    recordatorPruebas: { activo: false }
+};
+
+let filtrosActivos = {
+    estado: '',
+    operador: '',
+    fecha: ''
+};
+
+// ========================================
+// 1. MODO CLARO/OSCURO
+// ========================================
+function toggleTheme() {
+    const body = document.body;
+    const isLightMode = document.getElementById('theme-switch').checked;
+    
+    if (isLightMode) {
+        body.classList.add('light-mode');
+        localStorage.setItem(TEMA_KEY, 'light');
+    } else {
+        body.classList.remove('light-mode');
+        localStorage.setItem(TEMA_KEY, 'dark');
+    }
+}
+
+function cargarPreferenciaTema() {
+    const temaGuardado = localStorage.getItem(TEMA_KEY);
+    if (temaGuardado === 'light') {
+        document.body.classList.add('light-mode');
+        const themeSwitch = document.getElementById('theme-switch');
+        if (themeSwitch) themeSwitch.checked = true;
+    }
+}
+
+// ========================================
+// 2. FILTROS AVANZADOS
+// ========================================
+function toggleFiltrosPanel() {
+    const panel = document.getElementById('panel-filtros');
+    if (panel) {
+        panel.classList.toggle('active');
+        actualizarBadgeFiltros();
+    }
+}
+
+function aplicarFiltros() {
+    const estadoSelect = document.getElementById('filtro-estado');
+    const operadorSelect = document.getElementById('filtro-operador');
+    const fechaSelect = document.getElementById('filtro-fecha');
+    
+    if (estadoSelect) filtrosActivos.estado = estadoSelect.value;
+    if (operadorSelect) filtrosActivos.operador = operadorSelect.value;
+    if (fechaSelect) filtrosActivos.fecha = fechaSelect.value;
+    
+    filtrarTablaCompleta();
+    actualizarBadgeFiltros();
+    mostrarNotificacion('🔍 Filtros aplicados', 'info');
+}
+
+function limpiarFiltros() {
+    const estadoSelect = document.getElementById('filtro-estado');
+    const operadorSelect = document.getElementById('filtro-operador');
+    const fechaSelect = document.getElementById('filtro-fecha');
+    
+    if (estadoSelect) estadoSelect.value = '';
+    if (operadorSelect) operadorSelect.value = '';
+    if (fechaSelect) fechaSelect.value = '';
+    
+    filtrosActivos = { estado: '', operador: '', fecha: '' };
+    
+    filtrarTablaCompleta();
+    actualizarBadgeFiltros();
+    mostrarNotificacion('🗑️ Filtros limpiados', 'info');
+}
+
+function filtrarTablaCompleta() {
+    const tbody = document.getElementById('table-body');
+    if (!tbody) return;
+    
+    const filas = tbody.getElementsByTagName('tr');
+    
+    for (let fila of filas) {
+        // Skip detail rows
+        if (fila.classList.contains('detalle-row')) continue;
+        
+        let mostrar = true;
+        
+        // Filtro por estado
+        if (filtrosActivos.estado) {
+            const estadoCell = fila.querySelector('.estado-badge');
+            if (estadoCell) {
+                const estado = estadoCell.textContent.trim().toLowerCase().replace(/ /g, '-').replace('á','a');
+                if (!estado.includes(filtrosActivos.estado)) {
+                    mostrar = false;
+                }
+            }
+        }
+        
+        // Filtro por operador
+        if (filtrosActivos.operador && mostrar) {
+            const operadorCell = fila.querySelector('.operador-select');
+            if (operadorCell && operadorCell.value !== filtrosActivos.operador) {
+                mostrar = false;
+            }
+        }
+        
+        // Filtro por fecha
+        if (filtrosActivos.fecha && mostrar) {
+            mostrar = filtrarPorFecha(fila, filtrosActivos.fecha);
+        }
+        
+        fila.style.display = mostrar ? '' : 'none';
+    }
+}
+
+function filtrarPorFecha(fila, rangoFecha) {
+    const timestamps = fila.querySelectorAll('.timestamp-cell');
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    for (let cell of timestamps) {
+        const texto = cell.textContent.trim();
+        if (texto === '-') continue;
+        
+        const match = texto.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (!match) continue;
+        
+        const fecha = new Date(match[3], match[2] - 1, match[1]);
+        fecha.setHours(0, 0, 0, 0);
+        
+        switch(rangoFecha) {
+            case 'hoy':
+                if (fecha.getTime() === hoy.getTime()) return true;
+                break;
+            case 'ayer':
+                const ayer = new Date(hoy);
+                ayer.setDate(ayer.getDate() - 1);
+                if (fecha.getTime() === ayer.getTime()) return true;
+                break;
+            case 'semana':
+                const inicioSemana = new Date(hoy);
+                inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
+                if (fecha >= inicioSemana) return true;
+                break;
+            case 'mes':
+                if (fecha.getMonth() === hoy.getMonth() && 
+                    fecha.getFullYear() === hoy.getFullYear()) return true;
+                break;
+        }
+    }
+    
+    return false;
+}
+
+function actualizarBadgeFiltros() {
+    const cantidadActivos = Object.values(filtrosActivos).filter(v => v !== '').length;
+    const btn = document.querySelector('button[onclick="toggleFiltrosPanel()"]');
+    
+    if (!btn) return;
+    
+    const badgeAnterior = btn.querySelector('.badge-filtros-activos');
+    if (badgeAnterior) badgeAnterior.remove();
+    
+    if (cantidadActivos > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'badge-filtros-activos';
+        badge.textContent = cantidadActivos;
+        btn.appendChild(badge);
+    }
+}
+
+function poblarFiltroOperadores() {
+    const select = document.getElementById('filtro-operador');
+    if (!select || typeof operadores === 'undefined') return;
+    
+    select.innerHTML = '<option value="">Todos</option>';
+    operadores.forEach(op => {
+        const option = document.createElement('option');
+        option.value = op;
+        option.textContent = op;
+        select.appendChild(option);
+    });
+}
+
+// ========================================
+// 3. ALERTAS Y NOTIFICACIONES
+// ========================================
+function verificarAlertas() {
+    const alertasParaMostrar = [];
+    
+    if (typeof datos === 'undefined') return;
+    
+    // Verificar objetivos abiertos mucho tiempo
+    if (configAlertas.tiempoAbierto.activo) {
+        const objetivosAbiertosLargo = obtenerObjetivosAbiertosLargo();
+        if (objetivosAbiertosLargo.length > 0) {
+            alertasParaMostrar.push({
+                tipo: 'warning',
+                titulo: '⏰ Objetivos Abiertos Demasiado Tiempo',
+                mensaje: `${objetivosAbiertosLargo.length} objetivo(s) llevan más de ${configAlertas.tiempoAbierto.horas}h abiertos`,
+                lista: objetivosAbiertosLargo
+            });
+        }
+    }
+    
+    // Verificar objetivos sin cerrar a las 18:00
+    if (configAlertas.sinCerrar.activo) {
+        const horaActual = new Date().getHours();
+        if (horaActual >= 18) {
+            const sinCerrar = obtenerObjetivosSinCerrar();
+            if (sinCerrar.length > 0) {
+                alertasParaMostrar.push({
+                    tipo: 'danger',
+                    titulo: '⚠️ Objetivos Sin Cerrar',
+                    mensaje: `${sinCerrar.length} objetivo(s) aún abiertos`,
+                    lista: sinCerrar
+                });
+            }
+        }
+    }
+    
+    alertasParaMostrar.forEach(alerta => mostrarAlertaVisual(alerta));
+}
+
+function obtenerObjetivosAbiertosLargo() {
+    const resultado = [];
+    const limiteHoras = configAlertas.tiempoAbierto.horas * 3600000;
+    const ahora = new Date().getTime();
+    
+    if (typeof datos === 'undefined') return resultado;
+    
+    datos.forEach(obj => {
+        if (!obj.movimientos || obj.movimientos.length === 0) return;
+        
+        for (let i = obj.movimientos.length - 1; i >= 0; i--) {
+            if (obj.movimientos[i].tipo === 'apertura') {
+                const tiempoApertura = parsearTimestampCompleto(obj.movimientos[i].timestamp).getTime();
+                const duracion = ahora - tiempoApertura;
+                
+                if (duracion > limiteHoras) {
+                    resultado.push(`${obj.objetivo} (${Math.floor(duracion/3600000)}h)`);
+                }
+                break;
+            } else if (obj.movimientos[i].tipo === 'cierre') {
+                break;
+            }
+        }
+    });
+    
+    return resultado;
+}
+
+function obtenerObjetivosSinCerrar() {
+    const resultado = [];
+    
+    if (typeof datos === 'undefined') return resultado;
+    
+    datos.forEach(obj => {
+        if (!obj.movimientos || obj.movimientos.length === 0) return;
+        
+        const ultimoMov = obj.movimientos[obj.movimientos.length - 1];
+        if (ultimoMov.tipo === 'apertura') {
+            resultado.push(obj.objetivo);
+        }
+    });
+    
+    return resultado;
+}
+
+function mostrarAlertaVisual(alerta) {
+    const container = document.getElementById('alertas-container');
+    if (!container) return;
+    
+    const alertaDiv = document.createElement('div');
+    alertaDiv.className = `alerta-item ${alerta.tipo}`;
+    
+    let listaHTML = '';
+    if (alerta.lista && alerta.lista.length > 0) {
+        listaHTML = '<ul class="alerta-lista">';
+        alerta.lista.slice(0, 5).forEach(item => {
+            listaHTML += `<li>${item}</li>`;
+        });
+        if (alerta.lista.length > 5) {
+            listaHTML += `<li>... y ${alerta.lista.length - 5} más</li>`;
+        }
+        listaHTML += '</ul>';
+    }
+    
+    alertaDiv.innerHTML = `
+        <div class="alerta-header">
+            <span class="alerta-titulo">${alerta.titulo}</span>
+            <button class="alerta-cerrar" onclick="this.parentElement.parentElement.remove()">✕</button>
+        </div>
+        <div class="alerta-mensaje">${alerta.mensaje}</div>
+        ${listaHTML}
+    `;
+    
+    container.appendChild(alertaDiv);
+    
+    setTimeout(() => {
+        if (alertaDiv.parentElement) {
+            alertaDiv.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => alertaDiv.remove(), 300);
+        }
+    }, 10000);
+}
+
+function abrirModalAlertas() {
+    cargarConfigAlertas();
+    
+    const tiempoAbiertoCheck = document.getElementById('alerta-tiempo-abierto');
+    const horasInput = document.getElementById('alerta-horas');
+    const sinCerrarCheck = document.getElementById('alerta-sin-cerrar');
+    const resumenCheck = document.getElementById('alerta-resumen-diario');
+    const pruebasCheck = document.getElementById('alerta-pruebas');
+    
+    if (tiempoAbiertoCheck) tiempoAbiertoCheck.checked = configAlertas.tiempoAbierto.activo;
+    if (horasInput) horasInput.value = configAlertas.tiempoAbierto.horas;
+    if (sinCerrarCheck) sinCerrarCheck.checked = configAlertas.sinCerrar.activo;
+    if (resumenCheck) resumenCheck.checked = configAlertas.resumenDiario.activo;
+    if (pruebasCheck) pruebasCheck.checked = configAlertas.recordatorPruebas.activo;
+    
+    const modal = document.getElementById('modal-config-alertas');
+    if (modal) modal.classList.add('active');
+}
+
+function cerrarModalAlertas() {
+    const modal = document.getElementById('modal-config-alertas');
+    if (modal) modal.classList.remove('active');
+}
+
+function guardarConfigAlertas() {
+    const tiempoAbiertoCheck = document.getElementById('alerta-tiempo-abierto');
+    const horasInput = document.getElementById('alerta-horas');
+    const sinCerrarCheck = document.getElementById('alerta-sin-cerrar');
+    const resumenCheck = document.getElementById('alerta-resumen-diario');
+    const pruebasCheck = document.getElementById('alerta-pruebas');
+    
+    configAlertas = {
+        tiempoAbierto: {
+            activo: tiempoAbiertoCheck ? tiempoAbiertoCheck.checked : false,
+            horas: horasInput ? parseInt(horasInput.value) : 8
+        },
+        sinCerrar: {
+            activo: sinCerrarCheck ? sinCerrarCheck.checked : true,
+            hora: '18:00'
+        },
+        resumenDiario: {
+            activo: resumenCheck ? resumenCheck.checked : true
+        },
+        recordatorPruebas: {
+            activo: pruebasCheck ? pruebasCheck.checked : false
+        }
+    };
+    
+    localStorage.setItem(CONFIG_ALERTAS_KEY, JSON.stringify(configAlertas));
+    cerrarModalAlertas();
+    mostrarNotificacion('💾 Configuración de alertas guardada', 'success');
+}
+
+function cargarConfigAlertas() {
+    const guardado = localStorage.getItem(CONFIG_ALERTAS_KEY);
+    if (guardado) {
+        try {
+            configAlertas = JSON.parse(guardado);
+        } catch (e) {
+            console.error('Error al cargar config de alertas:', e);
+        }
+    }
+}
+
+function parsearTimestampCompleto(timestamp) {
+    const [fecha, hora] = timestamp.split(' ');
+    const [d, m, y] = fecha.split('/');
+    const [h, min, s] = hora.split(':');
+    return new Date(y, m - 1, d, h, min, s);
+}
+
+// ========================================
+// 4. DASHBOARD DE ESTADÍSTICAS
+// ========================================
+function abrirDashboard() {
+    const modal = document.getElementById('modal-dashboard');
+    if (modal) {
+        modal.classList.add('active');
+        calcularYMostrarEstadisticas();
+    }
+}
+
+function cerrarDashboard() {
+    const modal = document.getElementById('modal-dashboard');
+    if (modal) modal.classList.remove('active');
+}
+
+function calcularYMostrarEstadisticas() {
+    const stats = calcularEstadisticasMes();
+    
+    const totalMovEl = document.getElementById('total-movimientos-mes');
+    const promedioEl = document.getElementById('promedio-diario');
+    const objetivoEl = document.getElementById('objetivo-mas-activo');
+    const duracionEl = document.getElementById('duracion-promedio');
+    
+    if (totalMovEl) totalMovEl.textContent = stats.totalMovimientos;
+    if (promedioEl) promedioEl.textContent = stats.promedioDiario;
+    if (objetivoEl) objetivoEl.textContent = stats.objetivoMasActivo;
+    if (duracionEl) duracionEl.textContent = stats.duracionPromedio;
+    
+    generarGraficoMovimientos(stats.movimientosPorDia);
+    generarGraficoObjetivos(stats.objetivosTop);
+    generarGraficoOperadores(stats.performanceOperadores);
+    generarGraficoDuraciones(stats.distribucionDuraciones);
+}
+
+function calcularEstadisticasMes() {
+    const ahora = new Date();
+    const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    
+    let totalMovimientos = 0;
+    const movimientosPorDia = {};
+    const conteoPorObjetivo = {};
+    const conteoPorOperador = {};
+    const duraciones = [];
+    
+    // Inicializar últimos 7 días
+    for (let i = 6; i >= 0; i--) {
+        const fecha = new Date();
+        fecha.setDate(fecha.getDate() - i);
+        const key = fecha.toLocaleDateString('es-AR', {day: '2-digit', month: '2-digit'});
+        movimientosPorDia[key] = 0;
+    }
+    
+    // Cargar historial desde localStorage
+    const historial = JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]');
+    
+    console.log('📊 Dashboard - Historial cargado:', historial.length, 'entradas');
+    
+    // También incluir datos actuales si hay movimientos
+    const todosLosDatos = [...historial];
+    
+    // Agregar datos actuales si existen
+    if (typeof datos !== 'undefined') {
+        const datosActualesConMovimientos = datos.filter(obj => 
+            obj.movimientos && obj.movimientos.length > 0
+        );
+        if (datosActualesConMovimientos.length > 0) {
+            todosLosDatos.push({
+                fecha: new Date().toISOString(),
+                datos: datosActualesConMovimientos
+            });
+            console.log('📊 Dashboard - Agregados datos actuales:', datosActualesConMovimientos.length, 'objetivos');
+        }
+    }
+    
+    if (todosLosDatos.length === 0) {
+        console.log('⚠️ Dashboard - No hay datos para procesar');
+        return {
+            totalMovimientos: 0,
+            promedioDiario: 0,
+            objetivoMasActivo: '-',
+            duracionPromedio: '-',
+            movimientosPorDia,
+            objetivosTop: [],
+            performanceOperadores: [],
+            distribucionDuraciones: []
+        };
+    }
+    
+    console.log('📊 Dashboard - Total entradas a procesar:', todosLosDatos.length);
+    
+    // Procesar cada entrada del historial
+    todosLosDatos.forEach((entrada, entradaIdx) => {
+        if (!entrada.datos) {
+            console.log(`⚠️ Entrada ${entradaIdx} sin datos`);
+            return;
+        }
+        
+        entrada.datos.forEach((obj, objIdx) => {
+            if (!obj.movimientos || obj.movimientos.length === 0) {
+                return;
+            }
+            
+            console.log(`Procesando objetivo: ${obj.objetivo}, movimientos: ${obj.movimientos.length}`);
+            
+            obj.movimientos.forEach((mov, movIdx) => {
+                // Variables para tracking
+                let tieneApertura = mov.apertura && mov.apertura.trim() !== '';
+                let tieneCierre = mov.cierre && mov.cierre.trim() !== '';
+                
+                if (!tieneApertura && !tieneCierre) {
+                    console.log(`⚠️ Movimiento vacío en ${obj.objetivo}`);
+                    return;
+                }
+                
+                // Procesar apertura si existe
+                if (tieneApertura) {
+                    try {
+                        const fechaApertura = parsearTimestamp(mov.apertura);
+                        if (fechaApertura >= inicioMes) {
+                            totalMovimientos++;
+                            const keyApertura = fechaApertura.toLocaleDateString('es-AR', {day: '2-digit', month: '2-digit'});
+                            if (movimientosPorDia[keyApertura] !== undefined) {
+                                movimientosPorDia[keyApertura]++;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error procesando apertura:', mov.apertura, error);
+                    }
+                }
+                
+                // Procesar cierre si existe
+                if (tieneCierre) {
+                    try {
+                        const fechaCierre = parsearTimestamp(mov.cierre);
+                        if (fechaCierre >= inicioMes) {
+                            totalMovimientos++;
+                            const keyCierre = fechaCierre.toLocaleDateString('es-AR', {day: '2-digit', month: '2-digit'});
+                            if (movimientosPorDia[keyCierre] !== undefined) {
+                                movimientosPorDia[keyCierre]++;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error procesando cierre:', mov.cierre, error);
+                    }
+                }
+                
+                // Contar por objetivo (una vez por movimiento, sin importar si tiene apertura, cierre o ambos)
+                conteoPorObjetivo[obj.objetivo] = (conteoPorObjetivo[obj.objetivo] || 0) + 1;
+                
+                // Contar por operador (del objeto, no del movimiento individual)
+                if (obj.operador && obj.operador.trim() !== '') {
+                    conteoPorOperador[obj.operador] = (conteoPorOperador[obj.operador] || 0) + 1;
+                }
+                
+                // Calcular duraciones SOLO para movimientos completos (apertura Y cierre)
+                if (tieneApertura && tieneCierre) {
+                    console.log(`📏 Calculando duración: ${mov.apertura} -> ${mov.cierre}`);
+                    try {
+                        const duracionMinutos = calcularDuracionEnMinutos(mov.apertura, mov.cierre);
+                        console.log(`   ✓ Duración: ${duracionMinutos} minutos (${(duracionMinutos/60).toFixed(2)} horas)`);
+                        if (duracionMinutos > 0 && duracionMinutos < 24 * 60) { // Entre 0 y 24 horas
+                            duraciones.push(duracionMinutos);
+                        } else {
+                            console.log(`   ⚠️ Duración fuera de rango: ${duracionMinutos} minutos`);
+                        }
+                    } catch (error) {
+                        console.error('   ❌ Error calculando duración:', error);
+                    }
+                }
+            });
+        });
+    });
+    
+    console.log('📊 Dashboard - Resultados:', {
+        totalMovimientos,
+        diasConMovimientos: Object.keys(movimientosPorDia).filter(k => movimientosPorDia[k] > 0).length,
+        objetivosUnicos: Object.keys(conteoPorObjetivo).length,
+        operadores: Object.keys(conteoPorOperador).length,
+        duracionesCalculadas: duraciones.length
+    });
+    
+    const diasTranscurridos = Math.max(1, Math.ceil((ahora - inicioMes) / (1000 * 60 * 60 * 24)));
+    const promedioDiario = Math.round(totalMovimientos / diasTranscurridos);
+    
+    let objetivoMasActivo = '-';
+    let maxMovimientos = 0;
+    Object.entries(conteoPorObjetivo).forEach(([obj, count]) => {
+        if (count > maxMovimientos) {
+            maxMovimientos = count;
+            objetivoMasActivo = obj.length > 30 ? obj.substring(0, 27) + '...' : obj;
+        }
+    });
+    
+    const duracionPromedio = duraciones.length > 0
+        ? formatearDuracion((duraciones.reduce((a, b) => a + b, 0) / duraciones.length) * 60000)
+        : '-';
+    
+    const objetivosTop = Object.entries(conteoPorObjetivo)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+    
+    const performanceOperadores = Object.entries(conteoPorOperador)
+        .sort((a, b) => b[1] - a[1]);
+    
+    // Convertir duraciones de minutos a milisegundos para el gráfico
+    const duracionesEnMs = duraciones.map(mins => mins * 60000);
+    
+    return {
+        totalMovimientos,
+        promedioDiario,
+        objetivoMasActivo,
+        duracionPromedio,
+        movimientosPorDia,
+        objetivosTop,
+        performanceOperadores,
+        distribucionDuraciones: duracionesEnMs
+    };
+}
+
+// Función auxiliar para calcular duración en minutos
+function calcularDuracionEnMinutos(timestampInicio, timestampFin) {
+    try {
+        if (!timestampInicio || !timestampFin) {
+            console.error('Timestamps vacíos:', {timestampInicio, timestampFin});
+            return 0;
+        }
+        
+        // Los timestamps vienen en formato "DD/MM/YYYY HH:MM:SS"
+        // Extraer solo la parte de hora "HH:MM:SS"
+        const partes1 = timestampInicio.split(' ');
+        const partes2 = timestampFin.split(' ');
+        
+        if (partes1.length < 2 || partes2.length < 2) {
+            console.error('Formato de timestamp inválido:', {timestampInicio, timestampFin});
+            return 0;
+        }
+        
+        const horaInicio = partes1[1]; // "HH:MM:SS"
+        const horaFin = partes2[1]; // "HH:MM:SS"
+        
+        // Extraer horas y minutos (ignorar segundos para el cálculo)
+        const [hI, mI] = horaInicio.split(':').map(Number);
+        const [hF, mF] = horaFin.split(':').map(Number);
+        
+        if (isNaN(hI) || isNaN(mI) || isNaN(hF) || isNaN(mF)) {
+            console.error('Horas/minutos inválidos:', {hI, mI, hF, mF});
+            return 0;
+        }
+        
+        let minutos = (hF * 60 + mF) - (hI * 60 + mI);
+        
+        // Si es negativo, asumimos que cruzó medianoche
+        if (minutos < 0) {
+            minutos += 24 * 60;
+        }
+        
+        return minutos;
+    } catch (error) {
+        console.error('Error calculando duración:', error, 'Inicio:', timestampInicio, 'Fin:', timestampFin);
+        return 0;
+    }
+}
+
+function generarGraficoMovimientos(movimientosPorDia) {
+    const ctx = document.getElementById('chart-movimientos-dia');
+    if (!ctx || typeof Chart === 'undefined') return;
+    
+    if (ctx.chart) ctx.chart.destroy();
+    
+    const labels = Object.keys(movimientosPorDia);
+    const data = Object.values(movimientosPorDia);
+    
+    ctx.chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Movimientos',
+                data: data,
+                borderColor: 'rgb(0, 255, 255)',
+                backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function generarGraficoObjetivos(objetivosTop) {
+    const ctx = document.getElementById('chart-objetivos-top');
+    if (!ctx || typeof Chart === 'undefined') return;
+    
+    if (ctx.chart) ctx.chart.destroy();
+    
+    const labels = objetivosTop.map(([obj]) => {
+        return obj.length > 25 ? obj.substring(0, 22) + '...' : obj;
+    });
+    const data = objetivosTop.map(([, count]) => count);
+    
+    ctx.chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Movimientos',
+                data: data,
+                backgroundColor: 'rgba(0, 255, 136, 0.6)',
+                borderColor: 'rgb(0, 255, 136)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+function generarGraficoOperadores(performanceOperadores) {
+    const ctx = document.getElementById('chart-operadores');
+    if (!ctx || typeof Chart === 'undefined') return;
+    
+    if (ctx.chart) ctx.chart.destroy();
+    
+    const labels = performanceOperadores.map(([op]) => op);
+    const data = performanceOperadores.map(([, count]) => count);
+    
+    const colores = [
+        'rgba(0, 255, 255, 0.6)',
+        'rgba(255, 0, 255, 0.6)',
+        'rgba(0, 255, 136, 0.6)',
+        'rgba(255, 215, 0, 0.6)',
+        'rgba(255, 102, 0, 0.6)',
+        'rgba(102, 204, 255, 0.6)',
+        'rgba(255, 102, 204, 0.6)',
+        'rgba(153, 255, 102, 0.6)'
+    ];
+    
+    ctx.chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colores,
+                borderColor: colores.map(c => c.replace('0.6', '1')),
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+
+function generarGraficoDuraciones(duraciones) {
+    const ctx = document.getElementById('chart-duraciones');
+    if (!ctx || typeof Chart === 'undefined') return;
+    
+    if (ctx.chart) ctx.chart.destroy();
+    
+    console.log('📊 Generando gráfico de duraciones:', duraciones.length, 'registros');
+    
+    const rangos = {
+        '0-2h': 0,
+        '2-4h': 0,
+        '4-6h': 0,
+        '6-8h': 0,
+        '8+h': 0
+    };
+    
+    if (duraciones && duraciones.length > 0) {
+        duraciones.forEach(d => {
+            const horas = d / 3600000;
+            console.log('Duración en horas:', horas);
+            if (horas < 2) rangos['0-2h']++;
+            else if (horas < 4) rangos['2-4h']++;
+            else if (horas < 6) rangos['4-6h']++;
+            else if (horas < 8) rangos['6-8h']++;
+            else rangos['8+h']++;
+        });
+    }
+    
+    console.log('📊 Rangos calculados:', rangos);
+    
+    ctx.chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(rangos),
+            datasets: [{
+                label: 'Cantidad',
+                data: Object.values(rangos),
+                backgroundColor: 'rgba(255, 215, 0, 0.6)',
+                borderColor: 'rgb(255, 215, 0)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function formatearDuracion(ms) {
+    const horas = Math.floor(ms / 3600000);
+    const minutos = Math.floor((ms % 3600000) / 60000);
+    return `${horas}h ${minutos}m`;
+}
+
+function parsearTimestamp(timestamp) {
+    const [fecha, hora] = timestamp.split(' ');
+    const [d, m, y] = fecha.split('/');
+    const [h, min, s] = hora.split(':');
+    return new Date(y, m - 1, d, h, min, s);
+}
+
+// ========================================
+// 5. BACKUP Y RESTAURACIÓN
+// ========================================
+function abrirModalBackup() {
+    const modal = document.getElementById('modal-backup');
+    if (modal) {
+        modal.classList.add('active');
+        actualizarInfoBackup();
+    }
+}
+
+function cerrarModalBackup() {
+    const modal = document.getElementById('modal-backup');
+    if (modal) modal.classList.remove('active');
+}
+
+function actualizarInfoBackup() {
+    const ultimoBackup = localStorage.getItem(ULTIMO_BACKUP_KEY);
+    const elemento = document.getElementById('ultimo-backup');
+    if (elemento) {
+        elemento.textContent = ultimoBackup || 'Nunca';
+    }
+}
+
+function descargarBackup() {
+    if (typeof datos === 'undefined' || typeof operadores === 'undefined') {
+        mostrarNotificacion('❌ No hay datos para respaldar', 'error');
+        return;
+    }
+    
+    const HISTORIAL_KEY = 'control_acp_historial';
+    
+    const backup = {
+        version: '2.0',
+        fecha: new Date().toISOString(),
+        datos: datos,
+        operadores: operadores,
+        historial: JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]'),
+        configAlertas: configAlertas,
+        tema: localStorage.getItem(TEMA_KEY) || 'dark'
+    };
+    
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Control-ACP-Backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    const ahora = new Date().toLocaleString('es-AR');
+    localStorage.setItem(ULTIMO_BACKUP_KEY, ahora);
+    actualizarInfoBackup();
+    
+    mostrarNotificacion('💾 Backup descargado exitosamente', 'success');
+}
+
+function setupBackupFileInput() {
+    const inputArchivo = document.getElementById('archivo-backup');
+    if (inputArchivo) {
+        inputArchivo.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const backup = JSON.parse(event.target.result);
+                    previsualizarBackup(backup);
+                } catch (error) {
+                    mostrarNotificacion('❌ Error al leer el archivo de backup', 'error');
+                    console.error(error);
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+}
+
+function previsualizarBackup(backup) {
+    const preview = document.getElementById('backup-preview');
+    const content = document.getElementById('backup-preview-content');
+    
+    if (!preview || !content) return;
+    
+    let html = '<ul style="list-style: none; padding: 0;">';
+    html += `<li><strong>📅 Fecha del backup:</strong> ${new Date(backup.fecha).toLocaleString('es-AR')}</li>`;
+    html += `<li><strong>📊 Objetivos:</strong> ${backup.datos?.length || 0}</li>`;
+    html += `<li><strong>👥 Operadores:</strong> ${backup.operadores?.length || 0}</li>`;
+    html += `<li><strong>📚 Registros de historial:</strong> ${backup.historial?.length || 0}</li>`;
+    html += `<li><strong>🎨 Tema:</strong> ${backup.tema || 'dark'}</li>`;
+    html += '</ul>';
+    
+    content.innerHTML = html;
+    preview.style.display = 'block';
+    
+    window.backupTemp = backup;
+}
+
+function importarBackup() {
+    if (!window.backupTemp) {
+        mostrarNotificacion('❌ No hay backup para importar', 'error');
+        return;
+    }
+    
+    const modoRadio = document.querySelector('input[name="backup-modo"]:checked');
+    const modo = modoRadio ? modoRadio.value : 'reemplazar';
+    const backup = window.backupTemp;
+    
+    if (!confirm(`¿Confirmar importación en modo "${modo}"?\n\n⚠️ Esta acción sobrescribirá los datos actuales.`)) {
+        return;
+    }
+    
+    try {
+        const HISTORIAL_KEY = 'control_acp_historial';
+        const DATA_KEY = 'control_acp_data';
+        const OPERADORES_KEY = 'control_acp_operadores';
+        
+        if (modo === 'reemplazar') {
+            datos = backup.datos || [];
+            operadores = backup.operadores || [];
+            localStorage.setItem(HISTORIAL_KEY, JSON.stringify(backup.historial || []));
+            if (backup.configAlertas) {
+                configAlertas = backup.configAlertas;
+                localStorage.setItem(CONFIG_ALERTAS_KEY, JSON.stringify(configAlertas));
+            }
+            if (backup.tema) {
+                localStorage.setItem(TEMA_KEY, backup.tema);
+            }
+        } else {
+            backup.datos.forEach(objBackup => {
+                const existe = datos.find(o => o.id === objBackup.id);
+                if (!existe) {
+                    datos.push(objBackup);
+                }
+            });
+            
+            backup.operadores.forEach(op => {
+                if (!operadores.includes(op)) {
+                    operadores.push(op);
+                }
+            });
+        }
+        
+        localStorage.setItem(DATA_KEY, JSON.stringify(datos));
+        localStorage.setItem(OPERADORES_KEY, JSON.stringify(operadores));
+        
+        if (typeof actualizarTabla === 'function') actualizarTabla();
+        poblarFiltroOperadores();
+        cargarPreferenciaTema();
+        
+        cerrarModalBackup();
+        mostrarNotificacion('✅ Backup importado exitosamente', 'success');
+        
+        delete window.backupTemp;
+        const prevEl = document.getElementById('backup-preview');
+        if (prevEl) prevEl.style.display = 'none';
+        const inputArchivo = document.getElementById('archivo-backup');
+        if (inputArchivo) inputArchivo.value = '';
+        
+    } catch (error) {
+        mostrarNotificacion('❌ Error al importar backup', 'error');
+        console.error(error);
+    }
+}
+
+// ========================================
+// INICIALIZACIÓN
+// ========================================
+// Agregar al final del DOMContentLoaded existente o crear uno nuevo
+document.addEventListener('DOMContentLoaded', function() {
+    cargarPreferenciaTema();
+    cargarConfigAlertas();
+    poblarFiltroOperadores();
+    setupBackupFileInput();
+    
+    // Verificar alertas cada 5 minutos
+    setInterval(verificarAlertas, 300000);
+    verificarAlertas();
+});
+    </script>
+
+    <style>
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+    </style>
+
+    <!-- ========================================
+         NUEVAS FUNCIONALIDADES - MODALES HTML
+         ======================================== -->
+
+    <!-- Container de Alertas -->
+    <div id="alertas-container" class="alertas-container"></div>
+
+    <!-- Modal Configuración de Alertas -->
+    <div id="modal-config-alertas" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">🔔 Configuración de Alertas</div>
+            <div class="modal-body">
+                <div class="config-grupo">
+                    <label>
+                        <input type="checkbox" id="alerta-tiempo-abierto">
+                        <span>Alertar si objetivo abierto más de</span>
+                    </label>
+                    <input type="number" id="alerta-horas" value="8" min="1" max="24" style="width: 80px; margin-left: 34px; margin-top: 5px; padding: 5px;"> horas
+                </div>
+                <div class="config-grupo">
+                    <label>
+                        <input type="checkbox" id="alerta-sin-cerrar" checked>
+                        <span>Alertar objetivos sin cerrar a las 18:00</span>
+                    </label>
+                </div>
+                <div class="config-grupo">
+                    <label>
+                        <input type="checkbox" id="alerta-resumen-diario" checked>
+                        <span>Mostrar resumen diario</span>
+                    </label>
+                </div>
+                <div class="config-grupo">
+                    <label>
+                        <input type="checkbox" id="alerta-pruebas">
+                        <span>Recordar hacer pruebas</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-success" onclick="guardarConfigAlertas()">💾 Guardar</button>
+                <button class="btn btn-secondary" onclick="cerrarModalAlertas()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Dashboard -->
+    <div id="modal-dashboard" class="modal modal-fullscreen">
+        <div class="modal-content dashboard-content">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>📊 Dashboard de Estadísticas</span>
+                <button onclick="cerrarDashboard()" class="btn btn-secondary" style="padding: 5px 15px;">✕ Cerrar</button>
+            </div>
+            <div class="modal-body dashboard-body">
+                <!-- Métricas clave -->
+                <div class="metricas-grid">
+                    <div class="metrica-card">
+                        <div class="metrica-label">Total Movimientos Mes</div>
+                        <div class="metrica-value" id="total-movimientos-mes">0</div>
+                    </div>
+                    <div class="metrica-card">
+                        <div class="metrica-label">Promedio Diario</div>
+                        <div class="metrica-value" id="promedio-diario">0</div>
+                    </div>
+                    <div class="metrica-card">
+                        <div class="metrica-label">Objetivo Más Activo</div>
+                        <div class="metrica-value" id="objetivo-mas-activo" style="font-size: 1.2rem;">-</div>
+                    </div>
+                    <div class="metrica-card">
+                        <div class="metrica-label">Duración Promedio</div>
+                        <div class="metrica-value" id="duracion-promedio">-</div>
+                    </div>
+                </div>
+                
+                <!-- Gráficos -->
+                <div class="graficos-grid">
+                    <div class="grafico-container">
+                        <h3>📈 Movimientos por Día (Últimos 7 días)</h3>
+                        <canvas id="chart-movimientos-dia"></canvas>
+                    </div>
+                    <div class="grafico-container">
+                        <h3>🏆 Objetivos Más Usados</h3>
+                        <canvas id="chart-objetivos-top"></canvas>
+                    </div>
+                    <div class="grafico-container">
+                        <h3>👥 Performance por Operador</h3>
+                        <canvas id="chart-operadores"></canvas>
+                    </div>
+                    <div class="grafico-container">
+                        <h3>⏱️ Duración de Aperturas</h3>
+                        <canvas id="chart-duraciones"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Backup -->
+    <div id="modal-backup" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">💾 Backup y Restauración</div>
+            <div class="modal-body">
+                <div class="backup-section">
+                    <h3>📥 Descargar Backup</h3>
+                    <p>Incluye: datos, historial, configuración, operadores</p>
+                    <button onclick="descargarBackup()" class="btn btn-success" style="width: 100%;">
+                        📦 Descargar Backup Completo
+                    </button>
+                    <div class="backup-info">
+                        <small>Último backup: <span id="ultimo-backup">Nunca</span></small>
+                    </div>
+                </div>
+                
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border);">
+                
+                <div class="backup-section">
+                    <h3>📤 Importar Backup</h3>
+                    <input type="file" id="archivo-backup" accept=".json" style="display:none">
+                    <button onclick="document.getElementById('archivo-backup').click()" class="btn btn-primary" style="width: 100%;">
+                        📂 Seleccionar Archivo
+                    </button>
+                    <div id="backup-preview" style="display:none; margin-top: 15px;">
+                        <h4>Vista Previa:</h4>
+                        <div id="backup-preview-content"></div>
+                        <div class="backup-opciones">
+                            <label>
+                                <input type="radio" name="backup-modo" value="reemplazar" checked>
+                                Reemplazar todos los datos
+                            </label>
+                            <label>
+                                <input type="radio" name="backup-modo" value="fusionar">
+                                Fusionar con datos existentes
+                            </label>
+                        </div>
+                        <button onclick="importarBackup()" class="btn btn-warning" style="width: 100%;">
+                            ⚠️ Confirmar Importación
+                        </button>
+                    </div>
+                </div>
+                
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border);">
+                
+                <div class="backup-section">
+                    <h3>⚙️ Configuración</h3>
+                    <label style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="backup-automatico">
+                        <span>Backup automático semanal (guarda en navegador)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button onclick="cerrarModalBackup()" class="btn btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
