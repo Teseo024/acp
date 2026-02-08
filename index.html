@@ -1621,6 +1621,23 @@ input:checked + .slider:before {
             <div class="search-box">
                 <input type="text" id="search-input" placeholder="Buscar objetivo..." aria-label="Buscar objetivo">
             </div>
+            
+            <!-- 🔥 INDICADOR GOOGLE SHEETS -->
+            <div id="google-sheets-status" style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 15px;
+                background: var(--card-bg);
+                border: 2px solid var(--border);
+                border-radius: 8px;
+                font-size: 0.85rem;
+                font-weight: 600;
+            ">
+                <span id="sheets-icon">📊</span>
+                <span id="sheets-text">Google Sheets</span>
+            </div>
+            
             <div class="btn-group">
                 <!-- Fila 1: Acciones principales -->
                 <button class="btn btn-primary" onclick="exportarPDF()" aria-label="Exportar a PDF">📄 PDF</button>
@@ -1777,6 +1794,170 @@ input:checked + .slider:before {
         const NOTIFICATION_DURATION = 3000; // Duración de notificaciones en ms
         const MAX_HISTORIAL_ITEMS = 100; // Máximo de registros en historial
         const HORA_REGEX = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/; // Validación formato hora
+
+        // ============================================
+        // 🔧 CONFIGURACIÓN GOOGLE SHEETS
+        // ============================================
+        
+        /**
+         * IMPORTANTE: Pega aquí la URL de tu Google Apps Script
+         * La obtienes en el PASO 3 de la guía
+         */
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyIgL4SYmDvrSBXM0i-EA1Wwmstr3M-CfPA3dRRcL4POosnb4Tx6S6JNegzufN3__7c/exec';
+        
+        /**
+         * Envía datos a Google Sheets
+         * @param {Object} datos - Objeto con los datos a enviar
+         */
+        async function enviarAGoogleSheets(datos) {
+            // Si no hay URL configurada, solo guardar local
+            if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL === 'PEGA_AQUI_TU_URL_DE_GOOGLE_SCRIPT') {
+                console.warn('⚠️ URL de Google Script no configurada. Solo guardando localmente.');
+                actualizarIndicadorGoogleSheets('no-configurado');
+                return { status: 'local-only' };
+            }
+            
+            try {
+                actualizarIndicadorGoogleSheets('enviando');
+                
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Necesario para Google Apps Script
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(datos)
+                });
+                
+                // Con no-cors no podemos leer la respuesta, pero si llega aquí es éxito
+                console.log('✅ Datos enviados a Google Sheets');
+                actualizarIndicadorGoogleSheets('conectado');
+                return { status: 'success' };
+                
+            } catch (error) {
+                console.error('❌ Error al enviar a Google Sheets:', error);
+                actualizarIndicadorGoogleSheets('error');
+                return { status: 'error', error: error.message };
+            }
+        }
+
+        /**
+         * Actualiza el indicador visual de estado de Google Sheets
+         * @param {string} estado - 'no-configurado', 'enviando', 'conectado', 'error'
+         */
+        function actualizarIndicadorGoogleSheets(estado) {
+            const iconEl = document.getElementById('sheets-icon');
+            const textEl = document.getElementById('sheets-text');
+            const statusEl = document.getElementById('google-sheets-status');
+            
+            if (!iconEl || !textEl || !statusEl) return;
+            
+            switch(estado) {
+                case 'no-configurado':
+                    iconEl.textContent = '⚙️';
+                    textEl.textContent = 'No configurado';
+                    statusEl.style.borderColor = 'var(--text-secondary)';
+                    statusEl.style.color = 'var(--text-secondary)';
+                    break;
+                case 'enviando':
+                    iconEl.textContent = '⏳';
+                    textEl.textContent = 'Enviando...';
+                    statusEl.style.borderColor = 'var(--warning)';
+                    statusEl.style.color = 'var(--warning)';
+                    break;
+                case 'conectado':
+                    iconEl.textContent = '✅';
+                    textEl.textContent = 'Conectado';
+                    statusEl.style.borderColor = 'var(--success)';
+                    statusEl.style.color = 'var(--success)';
+                    // Volver a estado normal después de 3 segundos
+                    setTimeout(() => {
+                        iconEl.textContent = '📊';
+                        textEl.textContent = 'Google Sheets';
+                        statusEl.style.borderColor = 'var(--neon-cyan)';
+                        statusEl.style.color = 'var(--text-primary)';
+                    }, 3000);
+                    break;
+                case 'error':
+                    iconEl.textContent = '❌';
+                    textEl.textContent = 'Error';
+                    statusEl.style.borderColor = 'var(--danger)';
+                    statusEl.style.color = 'var(--danger)';
+                    setTimeout(() => {
+                        iconEl.textContent = '📊';
+                        textEl.textContent = 'Google Sheets';
+                        statusEl.style.borderColor = 'var(--border)';
+                        statusEl.style.color = 'var(--text-primary)';
+                    }, 5000);
+                    break;
+            }
+        }
+
+        /**
+         * Envía el resumen del cierre diario a Google Sheets
+         * @param {Array} datosConActividad - Objetivos que tuvieron actividad
+         * @param {string} tipoCierre - 'AUTOMÁTICO' o 'MANUAL'
+         */
+        async function enviarCierreDiarioAGoogleSheets(datosConActividad, tipoCierre) {
+            if (!datosConActividad || datosConActividad.length === 0) return;
+            
+            const timestamp = generarTimestamp();
+            
+            // Calcular estadísticas del día
+            let totalAperturas = 0;
+            let totalCierres = 0;
+            let totalPruebas = 0;
+            let objetivosConActividad = datosConActividad.length;
+            
+            datosConActividad.forEach(obj => {
+                if (obj.movimientos && obj.movimientos.length > 0) {
+                    obj.movimientos.forEach(mov => {
+                        if (mov.apertura) totalAperturas++;
+                        if (mov.cierre) totalCierres++;
+                    });
+                }
+                if (obj.prueba1) totalPruebas++;
+                if (obj.prueba2) totalPruebas++;
+            });
+            
+            // Enviar resumen general del día
+            await enviarAGoogleSheets({
+                timestamp: timestamp,
+                operador: 'SISTEMA',
+                objetivo: `CIERRE DIARIO ${tipoCierre}`,
+                accion: 'RESUMEN',
+                hora: timestamp.split(' ')[1] || '',
+                prueba: '',
+                observaciones: `Objetivos: ${objetivosConActividad} | Aperturas: ${totalAperturas} | Cierres: ${totalCierres} | Pruebas: ${totalPruebas}`,
+                duracion: ''
+            });
+            
+            // Enviar detalle de cada objetivo con actividad
+            for (const obj of datosConActividad) {
+                let observaciones = obj.observaciones || '';
+                
+                // Agregar info de movimientos
+                if (obj.movimientos && obj.movimientos.length > 0) {
+                    observaciones += ` [${obj.movimientos.length} movimiento(s)]`;
+                }
+                
+                await enviarAGoogleSheets({
+                    timestamp: timestamp,
+                    operador: obj.operador || 'Sin asignar',
+                    objetivo: obj.objetivo,
+                    accion: 'DETALLE CIERRE',
+                    hora: '',
+                    prueba: obj.prueba1 || obj.prueba2 || '',
+                    observaciones: observaciones,
+                    duracion: ''
+                });
+                
+                // Pequeña pausa para no saturar (opcional)
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            console.log(`✅ Cierre diario ${tipoCierre} enviado a Google Sheets`);
+        }
 
         // ============================================
         // FUNCIONES DE SEGURIDAD
@@ -2522,6 +2703,9 @@ window.onload = inicializarSistema;
 
             // Monitorear estado de conexión
             inicializarMonitoreoConexion();
+            
+            // 🔥 Inicializar indicador de Google Sheets
+            actualizarIndicadorGoogleSheets('no-configurado');
         }
 
         /**
@@ -2758,6 +2942,9 @@ window.onload = inicializarSistema;
                 }
                 
                 localStorage.setItem(HISTORIAL_KEY, JSON.stringify(historial));
+                
+                // 🔥 ENVIAR RESUMEN A GOOGLE SHEETS
+                enviarCierreDiarioAGoogleSheets(datosConActividad, 'AUTOMÁTICO');
             }
 
             // Limpiar SOLO los que tienen todos sus movimientos cerrados
@@ -3190,6 +3377,18 @@ window.onload = inicializarSistema;
                 actualizarTabla();
                 mostrarNotificacion(`✅ ${nombres[tipo]} registrada (#${obj.movimientos.length})`);
                 
+                // 🔥 ENVIAR A GOOGLE SHEETS
+                enviarAGoogleSheets({
+                    timestamp: timestamp,
+                    operador: obj.operador || 'Sin asignar',
+                    objetivo: obj.objetivo,
+                    accion: 'APERTURA',
+                    hora: timestamp.split(' ')[1] || '',
+                    prueba: obj.prueba1 || obj.prueba2 || '',
+                    observaciones: obj.observaciones || '',
+                    duracion: ''
+                });
+                
             } else if (tipo === 'cierre') {
                 const movimientoAbierto = obtenerMovimientoAbierto(obj);
                 
@@ -3204,6 +3403,18 @@ window.onload = inicializarSistema;
                         cierre: timestamp
                     });
                     mostrarNotificacion('⚠️ Cierre sin apertura registrado', 'warning');
+                    
+                    // 🔥 ENVIAR A GOOGLE SHEETS
+                    enviarAGoogleSheets({
+                        timestamp: timestamp,
+                        operador: obj.operador || 'Sin asignar',
+                        objetivo: obj.objetivo,
+                        accion: 'CIERRE SIN APERTURA',
+                        hora: timestamp.split(' ')[1] || '',
+                        prueba: obj.prueba1 || obj.prueba2 || '',
+                        observaciones: obj.observaciones || '',
+                        duracion: ''
+                    });
                 }
                 
                 sincronizarCamposLegacy(obj);
@@ -3212,6 +3423,19 @@ window.onload = inicializarSistema;
                 
                 if (movimientoAbierto) {
                     mostrarNotificacion(`✅ ${nombres[tipo]} registrado`);
+                    
+                    // 🔥 ENVIAR A GOOGLE SHEETS
+                    const duracion = calcularDuracion(movimientoAbierto.apertura, timestamp);
+                    enviarAGoogleSheets({
+                        timestamp: timestamp,
+                        operador: obj.operador || 'Sin asignar',
+                        objetivo: obj.objetivo,
+                        accion: 'CIERRE',
+                        hora: timestamp.split(' ')[1] || '',
+                        prueba: obj.prueba1 || obj.prueba2 || '',
+                        observaciones: obj.observaciones || '',
+                        duracion: duracion || ''
+                    });
                 }
                 
             } else {
@@ -3233,6 +3457,18 @@ window.onload = inicializarSistema;
                     guardarDatos();
                     actualizarTabla();
                     mostrarNotificacion(`✅ ${nombres[tipo]} registrada`);
+                    
+                    // 🔥 ENVIAR A GOOGLE SHEETS
+                    enviarAGoogleSheets({
+                        timestamp: timestamp,
+                        operador: obj.operador || 'Sin asignar',
+                        objetivo: obj.objetivo,
+                        accion: nombres[tipo].toUpperCase(),
+                        hora: timestamp.split(' ')[1] || '',
+                        prueba: timestamp,
+                        observaciones: obj.observaciones || '',
+                        duracion: ''
+                    });
                 }
             }
         }
@@ -3317,6 +3553,9 @@ window.onload = inicializarSistema;
                 });
                 
                 localStorage.setItem(HISTORIAL_KEY, JSON.stringify(historial));
+                
+                // 🔥 ENVIAR RESUMEN A GOOGLE SHEETS
+                enviarCierreDiarioAGoogleSheets(datosConActividad, 'MANUAL');
             }
 
             // Limpiar SOLO los que tienen todos sus movimientos cerrados
